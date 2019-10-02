@@ -211,7 +211,8 @@ class PostDevelopKtools(InstallKtoolsMixin, develop):
         develop.__init__(self, *args, **kwargs)
 
     def run(self):
-        self.install_ktools_source()
+        if os.name == "posix":		
+            self.install_ktools_source()
         develop.run(self)
 
     def get_outputs(self):
