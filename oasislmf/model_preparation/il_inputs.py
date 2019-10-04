@@ -243,7 +243,22 @@ def get_il_input_items(
     # a custom method is called that will generate this column and set it
     # in the accounts dataframe
     if 'layer_id' not in accounts_df:
-        accounts_df['layer_id'] = get_ids(accounts_df, [portfolio_num, acc_num, policy_num], group_by=[portfolio_num, acc_num])
+        if 'layerattachment' in accounts_df.columns:
+            # Add a layer_id which is the sequence of layers within a
+            # single account group, ordered by layerattachment. This join
+            # works because the indices are retained in the cumcount().
+            accounts_df = accounts_df.join((accounts_df
+                                            .sort_values('layerattachment')
+                                            .groupby([portfolio_num, acc_num])
+                                            .cumcount() + 1)
+                                           .rename('layer_id'))
+        else:
+            # IF there's no layer attachment, use the policynum order
+            accounts_df['layer_id'] = get_ids(accounts_df, [portfolio_num, acc_num, policy_num],
+                                              group_by=[portfolio_num, acc_num])
+
+        print("\tCount of accounts having different number of layers:")
+        print(accounts_df.groupby([portfolio_num, acc_num]).layer_id.max().value_counts())
 
     # Drop all columns from the accounts dataframe which are not either one of
     # portfolio num., acc. num., policy num., cond. numb., layer ID, or one of
