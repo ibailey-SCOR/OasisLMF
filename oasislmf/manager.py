@@ -545,13 +545,19 @@ class OasisManager(object):
         accounts_fp=None
 
     ):
+
+        # Check ifinsured loss reinsured loss will be done
         il = all(p in os.listdir(oasis_fp) for p in ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv', 'fm_xref.csv'])
         ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
+
+        # Check if it is a gul_item stream...i.e. ground up only calculation
         gul_item_stream = False if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) else True
 
+        # Create the ktools run folder if it doesn't exist
         if not os.path.exists(model_run_fp):
             Path(model_run_fp).mkdir(parents=True, exist_ok=True)
 
+        # Create the folder structure within the ktools run folder and copy in files
         prepare_run_directory(
             model_run_fp,
             oasis_fp,

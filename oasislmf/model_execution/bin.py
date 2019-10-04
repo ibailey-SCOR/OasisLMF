@@ -119,6 +119,7 @@ def prepare_run_directory(
     :type user_data_dir: str
     """
     try:
+        # Create folders
         for subdir in ['fifo', 'output', 'static', 'work']:
             Path(run_dir, subdir).mkdir(parents=True, exist_ok=True)
 
@@ -141,9 +142,11 @@ def prepare_run_directory(
             else:
                 shutil.move(src, run_dir)
 
+        # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
         shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
 
+        # Link or copy the model data into the run static folder
         model_data_dst_fp = os.path.join(run_dir, 'static')
 
         for path in glob.glob(os.path.join(model_data_fp, '*')):
@@ -172,11 +175,18 @@ def prepare_run_directory(
 
 
 def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=False):
+
+    # Get the file name of the expected .bin file
     bin_fp = os.path.join(run_dir, 'input', '{}.bin'.format(bin_name))
+
+    # Check if the bin file doesn't yet exist
     if not os.path.exists(bin_fp):
+
+        # Suffix for the file from the settings file
         setting_val = model_settings.get(setting_key)
 
         if not setting_val:
+            # look in the static folder
             model_data_bin_fp = os.path.join(run_dir, 'static', '{}.bin'.format(bin_name))
         else:
             # Format for data file names
@@ -204,6 +214,8 @@ def prepare_run_inputs(analysis_settings, run_dir, ri=False):
         model_settings = analysis_settings.get('model_settings', {})
 
         _prepare_input_bin(run_dir, 'events', model_settings, setting_key='event_set', ri=ri)
+
+        # check
         _prepare_input_bin(run_dir, 'returnperiods', model_settings, ri=ri)
         _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
 
