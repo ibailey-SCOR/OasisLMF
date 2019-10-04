@@ -26,6 +26,7 @@ from .model_execution.bin import (
     prepare_run_directory,
     prepare_run_inputs,
     move_input_files,
+    copy_static_files,
 )
 from .model_preparation.gul_inputs import (
     get_gul_input_items,
@@ -578,6 +579,9 @@ class OasisManager(object):
                 analysis_settings = analysis_settings['analysis_settings']
         except (IOError, TypeError, ValueError):
             raise OasisException('Invalid analysis settings file or file path: {}.'.format(_analysis_settings_fp))
+
+        # Copy static files into the ktools run folder
+        copy_static_files(model_run_fp, model_data_fp, analysis_settings)
 
         # Move input files into the ktools run folder
         move_input_files(model_run_fp, oasis_fp, analysis_settings)

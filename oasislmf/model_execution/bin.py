@@ -12,13 +12,15 @@ __all__ = [
     'csv_to_bin',
     'prepare_run_directory',
     'prepare_run_inputs',
-    'move_input_files'
+    'move_input_files',
+    'copy_static_files'
 ]
 
 import filecmp
 import glob
 import logging
 import os
+import errno
 import re
 import shutil
 import shutilwhich
@@ -131,24 +133,12 @@ def prepare_run_directory(
                 p = os.path.join(run_dir, 'input') if not ri else os.path.join(run_dir)
                 input_tarfile.extractall(path=p)
 
-
         # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
         shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
 
-        # Link or copy the model data into the run static folder
-        model_data_dst_fp = os.path.join(run_dir, 'static')
-
-        for path in glob.glob(os.path.join(model_data_fp, '*')):
-            fn = os.path.basename(path)
-            try:
-                if os.name == 'nt':
-                    shutil.copy(path, os.path.join(model_data_dst_fp, fn))
-                else:
-                    os.symlink(path, os.path.join(model_data_dst_fp, fn))
-            except Exception:
-                shutil.copytree(model_data_fp, os.path.join(model_data_dst_fp, fn))
-
+        # Copy user data
+        oasis_dst_fp = os.path.join(run_dir, 'input')
         if user_data_dir and os.path.exists(user_data_dir):
             for path in glob.glob(os.path.join(user_data_dir, '*')):
                 fn = os.path.basename(path)
@@ -166,6 +156,7 @@ def prepare_run_directory(
 
 def move_input_files(run_dir, oasis_src_fp, analysis_settings):
 
+
     # Move input files into the input folder
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
@@ -181,6 +172,53 @@ def move_input_files(run_dir, oasis_src_fp, analysis_settings):
 
     except OSError as e:
         raise OasisException from e
+
+
+def copy_static_files(run_dir, model_data_fp, analysis_settings):
+    """Link or copy files into the static folder
+    """
+
+    # Start with list of files that are always required
+    static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
+
+    # Check if random is required
+    if 'is_random_file' in analysis_settings and analysis_settings['is_random_file']:
+        static_files.append('random')
+
+    # Add the bin suffix
+    static_files = [f + ".bin" for f in static_files]
+    static_files.append("footprint.idx")
+
+    # Get the destination folder Link or copy the model data into the run static folder
+    model_data_dst_fp = os.path.join(run_dir, 'static')
+
+    try:
+        for fnm in static_files:
+
+            if not os.path.exists(os.path.join(model_data_fp, fnm)):
+                raise OasisException("Source file {} doesn't exist".format(
+                    os.path.join(model_data_fp, fnm)))
+            try:
+                # Use symbollic link if we can
+                os.symlink(
+                    os.path.join(model_data_fp, fnm),
+                    os.path.join(model_data_dst_fp, fnm))
+                print("Linked %s" % fnm)
+
+            except OSError as why:
+                # Otherwise make a copy (probably necessary on windows)
+                if why.errno == errno.EEXIST:
+                    print("Not copying {} because file exists".format(fnm))
+                    continue
+
+                print("Copying {} from {}".format(fnm, model_data_fp))
+                shutil.copy2(
+                    os.path.join(model_data_fp, fnm),
+                    os.path.join(model_data_dst_fp, fnm))
+
+    except OSError as e:
+        raise OasisException from e
+
 
 def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=False):
 
