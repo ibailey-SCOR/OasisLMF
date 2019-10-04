@@ -48,11 +48,10 @@ from .model_preparation.oed import load_oed_dfs
 from .model_preparation.utils import prepare_input_files_directory
 from .model_preparation.reinsurance_layer import write_files_for_reinsurance
 from .utils.data import (
-    get_dataframe,
-    get_ids,
     get_json,
     get_utctimestamp,
 )
+from .utils.read_exposure import read_exposure_df
 from .utils.exceptions import OasisException
 from .utils.log import oasis_log
 from .utils.defaults import (
@@ -377,6 +376,9 @@ class OasisManager(object):
             keys_fp
         )
 
+        # Read the exposure data file into a pandas dataframe.
+        exposure_df = read_exposure_df(exposure_fp, exposure_profile)
+
         # If a pre-generated keys file path has not been provided,
         # then it is asssumed some model lookup assets have been provided, so
         # as to allow the lookup to be instantiated and called to generated
@@ -384,17 +386,13 @@ class OasisManager(object):
         # were provided then a "deterministic" keys file is generated.
         _keys_fp = _keys_errors_fp = None
         if not keys_fp:
+            # If there is no keys file provided then it has to be generated.
             _keys_fp = os.path.join(target_dir, 'keys.csv')
             _keys_errors_fp = os.path.join(target_dir, 'keys-errors.csv')
 
             cov_types = supported_oed_coverage_types or self.supported_oed_coverage_types
 
             if deterministic:
-                exposure_df = get_dataframe(
-                    src_fp=exposure_fp,
-                    empty_data_error_msg='No exposure found in the source exposure (loc.) file'
-                )
-                exposure_df['loc_id'] = get_ids(exposure_df, [portfolio_num, acc_num, loc_num])
                 loc_ids = (loc_it['loc_id'] for _, loc_it in exposure_df.loc[:, ['loc_id']].iterrows())
                 keys = [
                     {'loc_id': _loc_id, 'peril_id': 1, 'coverage_type': cov_type, 'area_peril_id': i + 1, 'vulnerability_id': i + 1}
@@ -432,8 +430,8 @@ class OasisManager(object):
             _keys_fp = os.path.join(target_dir, os.path.basename(keys_fp))
 
         # Get the GUL input items and exposure dataframes
-        gul_inputs_df, exposure_df = get_gul_input_items(
-            exposure_fp,
+        gul_inputs_df = get_gul_input_items(
+            exposure_df,
             _keys_fp,
             exposure_profile=exposure_profile
         )
