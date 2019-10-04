@@ -11,7 +11,8 @@ __all__ = [
     'create_binary_tar_file',
     'csv_to_bin',
     'prepare_run_directory',
-    'prepare_run_inputs'
+    'prepare_run_inputs',
+    'move_input_files'
 ]
 
 import filecmp
@@ -130,17 +131,6 @@ def prepare_run_directory(
                 p = os.path.join(run_dir, 'input') if not ri else os.path.join(run_dir)
                 input_tarfile.extractall(path=p)
 
-        oasis_dst_fp = os.path.join(run_dir, 'input')
-
-        for p in os.listdir(oasis_src_fp):
-            src = os.path.join(oasis_src_fp, p)
-            if src.endswith('.tar') or src.endswith('.tar.gz'):
-                continue
-            dst = os.path.join(oasis_dst_fp, p)
-            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
-                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
-            else:
-                shutil.move(src, run_dir)
 
         # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
@@ -173,6 +163,24 @@ def prepare_run_directory(
     except OSError as e:
         raise OasisException from e
 
+
+def move_input_files(run_dir, oasis_src_fp, analysis_settings):
+
+    # Move input files into the input folder
+    oasis_dst_fp = os.path.join(run_dir, 'input')
+    try:
+        for p in os.listdir(oasis_src_fp):
+            src = os.path.join(oasis_src_fp, p)
+            if src.endswith('.tar') or src.endswith('.tar.gz'):
+                continue
+            dst = os.path.join(oasis_dst_fp, p)
+            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
+                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
+            else:
+                shutil.move(src, run_dir)
+
+    except OSError as e:
+        raise OasisException from e
 
 def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=False):
 
