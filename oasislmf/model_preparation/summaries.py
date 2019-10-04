@@ -23,6 +23,7 @@ from ..utils.data import (
     merge_dataframes,
     set_dataframe_column_dtypes,
 )
+from ..utils.read_exposure import read_exposure_df
 from ..utils.defaults import (
     SOURCE_FILENAMES,
     SOURCE_IDX,
@@ -413,7 +414,7 @@ def write_df_to_file(df, target_dir, filename):
 
 
 @oasis_log
-def get_summary_xref_df(map_df, exposure_df, accounts_df, summaries_info_dict, summaries_type, gul_items=False):
+def get_summary_xref_df(map_df, exposure_fp, accounts_fp, summaries_info_dict, summaries_type, gul_items=False):
     """
     Create a Dataframe for either gul / il / ri  based on a section
     from the analysis settings
@@ -422,8 +423,8 @@ def get_summary_xref_df(map_df, exposure_df, accounts_df, summaries_info_dict, s
     :param map_df: Summary Map dataframe (GUL / IL)
     :type map_df:  pandas.DataFrame
 
-    :param exposure_df: Location OED data
-    :type exposure_df:  pandas.DataFrame
+    :param exposure_fp: Location OED data file
+    :type exposure_fp:  str
 
     :param accounts_df: Accounts OED data
     :type accounts_df:  pandas.DataFrame
@@ -472,6 +473,18 @@ def get_summary_xref_df(map_df, exposure_df, accounts_df, summaries_info_dict, s
     else:
         ids_set_df = map_df.loc[:, ['item_id']] if gul_items else map_df.loc[:, ['coverage_id']]
 
+    # Check if we need to read in teh exposure file
+    is_oed_needed = any(isinstance(get_column_selection(s), list) for s in summaries_info_dict)
+    if is_oed_needed:
+        exposure_df = read_exposure_df(exposure_fp)
+        if summaries_type != "gul":
+            accounts_df = get_dataframe(accounts_fp)
+        else:
+            accounts_df = None
+    else:
+        exposure_df=None
+        accounts_df=None
+
     # For each granularity build a set grouping
     for summary_set in summaries_info_dict:
         summary_set_df = ids_set_df
@@ -505,7 +518,8 @@ def get_summary_xref_df(map_df, exposure_df, accounts_df, summaries_info_dict, s
 
 
 @oasis_log
-def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=False, gul_item_stream=False):
+def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=False,
+                               exposure_fp=None, accounts_fp=None, gul_item_stream=False):
     """
     Top level function for creating the summaryxref files from the manager.py
 
@@ -544,19 +558,13 @@ def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=Fal
     ])
 
     # Load locations file for GUL OED fields
-    exposure_fp = os.path.join(model_run_fp, 'input', SOURCE_FILENAMES['loc'])
-    exposure_df = get_dataframe(
-        src_fp=exposure_fp,
-        empty_data_error_msg='No source exposure file found.')
-    exposure_df[SOURCE_IDX['loc']] = exposure_df.index
+    if not exposure_fp:
+        exposure_fp = os.path.join(model_run_fp, 'input', SOURCE_FILENAMES['loc'])
 
     # Load accounts file for IL OED fields
     if (il_summaries or ri_summaries):
-        accounts_fp = os.path.join(model_run_fp, 'input', SOURCE_FILENAMES['acc'])
-        accounts_df = get_dataframe(
-            src_fp=accounts_fp,
-            empty_data_error_msg='No source accounts file found.')
-        accounts_df[SOURCE_IDX['acc']] = accounts_df.index
+        if not accounts_fp:
+            accounts_fp = os.path.join(model_run_fp, 'input', SOURCE_FILENAMES['acc'])
 
     if gul_summaries:
         # Load GUL summary map
@@ -567,7 +575,7 @@ def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=Fal
 
         gul_summaryxref_df, gul_summary_desc = get_summary_xref_df(
             gul_map_df,
-            exposure_df,
+            exposure_fp,
             None,
             analysis_settings['gul_summaries'],
             'gul',
@@ -590,8 +598,8 @@ def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=Fal
 
         il_summaryxref_df, il_summary_desc = get_summary_xref_df(
             il_map_df,
-            exposure_df,
-            accounts_df,
+            exposure_fp,
+            accounts_fp,
             analysis_settings['il_summaries'],
             'il'
         )
@@ -618,8 +626,8 @@ def generate_summaryxref_files(model_run_fp, analysis_settings, il=False, ri=Fal
 
         ri_summaryxref_df, ri_summary_desc = get_summary_xref_df(
             il_map_df,
-            exposure_df,
-            accounts_df,
+            exposure_fp,
+            accounts_fp,
             analysis_settings['ri_summaries'],
             'ri'
         )

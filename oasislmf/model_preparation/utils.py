@@ -41,14 +41,14 @@ def prepare_input_files_directory(
                 complex_lookup_config_fp, keys_fp
             ) if p
         ]
-        if exposure_fp:
-            paths.append((exposure_fp, os.path.join(target_dir, SRC_NAME['loc'])))
-        if accounts_fp:
-            paths.append((accounts_fp, os.path.join(target_dir, SRC_NAME['acc'])))
-        if ri_info_fp:
-            paths.append((ri_info_fp, os.path.join(target_dir, SRC_NAME['info'])))
-        if ri_scope_fp:
-            paths.append((ri_scope_fp, os.path.join(target_dir, SRC_NAME['scope'])))
+        # if exposure_fp:
+        #     paths.append((exposure_fp, os.path.join(target_dir, SRC_NAME['loc'])))
+        # if accounts_fp:
+        #     paths.append((accounts_fp, os.path.join(target_dir, SRC_NAME['acc'])))
+        # if ri_info_fp:
+        #     paths.append((ri_info_fp, os.path.join(target_dir, SRC_NAME['info'])))
+        # if ri_scope_fp:
+        #     paths.append((ri_scope_fp, os.path.join(target_dir, SRC_NAME['scope'])))
 
         for src, dst in paths:
             if src and os.path.exists(src):

@@ -540,7 +540,10 @@ class OasisManager(object):
         ktools_alloc_rule_gul=None,
         ktools_alloc_rule_il=None,
         ktools_debug=None,
-        user_data_dir=None
+        user_data_dir=None,
+        exposure_fp=None,
+        accounts_fp=None
+
     ):
         il = all(p in os.listdir(oasis_fp) for p in ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv', 'fm_xref.csv'])
         ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
@@ -573,7 +576,9 @@ class OasisManager(object):
                                    analysis_settings,
                                    gul_item_stream=gul_item_stream,
                                    il=il,
-                                   ri=ri)
+                                   ri=ri,
+                                   exposure_fp=exposure_fp,
+                                   accounts_fp=accounts_fp)
 
         if not ri:
             fp = os.path.join(model_run_fp, 'input')
