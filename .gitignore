@@ -102,3 +102,4 @@ ENV/
 .mypy_cache/
 
 tests/model_execution/kparse_output/
+.idea/
