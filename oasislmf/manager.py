@@ -548,7 +548,7 @@ class OasisManager(object):
 
     ):
 
-        # Check ifinsured loss reinsured loss will be done
+        # Check if insured loss/reinsured loss will be done
         il = all(p in os.listdir(oasis_fp) for p in ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv', 'fm_xref.csv'])
         ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
 
@@ -559,11 +559,9 @@ class OasisManager(object):
         if not os.path.exists(model_run_fp):
             Path(model_run_fp).mkdir(parents=True, exist_ok=True)
 
-        # Create the folder structure within the ktools run folder and copy in files
+        # Create the folder structure within the ktools run folder
         prepare_run_directory(
             model_run_fp,
-            oasis_fp,
-            model_data_fp,
             analysis_settings_fp,
             user_data_dir=user_data_dir,
             ri=ri

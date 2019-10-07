@@ -35,12 +35,9 @@ from ..utils.exceptions import OasisException
 from ..utils.log import oasis_log
 from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
 
-
 @oasis_log
 def prepare_run_directory(
     run_dir,
-    oasis_src_fp,
-    model_data_fp,
     analysis_settings_fp,
     inputs_archive=None,
     user_data_dir=None,
@@ -89,34 +86,17 @@ def prepare_run_directory(
 
     If any subfolders are missing they are created.
 
-    Optionally, if the path to a set of Oasis files is provided then they
-    are copied into the ``input/csv`` subfolder.
-
     Optionally, if the path to the analysis settings JSON file is provided
     then it is copied to the base of the run directory.
 
-    Optionally, if the path to model data is provided then the files are
-    symlinked into the ``static`` subfolder provided the OS is of type
-    Darwin or Linux, otherwise the source folder tree is recursively
-    copied into the ``static`` subfolder.
-
     :param run_dir: the model run directory
     :type run_dir: str
-
-    :param oasis_src_fp: path to a set of Oasis files
-    :type oasis_src_fp: str
 
     :param ri: Boolean flag for RI mode
     :type ri: bool
 
     :param analysis_settings_fp: analysis settings JSON file path
     :type analysis_settings_fp: str
-
-    :param model_data_fp: model data source path
-    :type model_data_fp: str
-
-    :param inputs_archive: path to a tar file containing input files
-    :type inputs_archive: str
 
     :param: user_data_dir: path to a directory containing additional user-supplied model data
     :type user_data_dir: str
@@ -154,26 +134,6 @@ def prepare_run_directory(
         raise OasisException from e
 
 
-def move_input_files(run_dir, oasis_src_fp, analysis_settings):
-
-
-    # Move input files into the input folder
-    oasis_dst_fp = os.path.join(run_dir, 'input')
-    try:
-        for p in os.listdir(oasis_src_fp):
-            src = os.path.join(oasis_src_fp, p)
-            if src.endswith('.tar') or src.endswith('.tar.gz'):
-                continue
-            dst = os.path.join(oasis_dst_fp, p)
-            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
-                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
-            else:
-                shutil.move(src, run_dir)
-
-    except OSError as e:
-        raise OasisException from e
-
-
 def copy_static_files(run_dir, model_data_fp, analysis_settings):
     """Link or copy files into the static folder
     """
@@ -192,29 +152,52 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     # Get the destination folder Link or copy the model data into the run static folder
     model_data_dst_fp = os.path.join(run_dir, 'static')
 
-    try:
-        for fnm in static_files:
+    for fnm in static_files:
 
-            if not os.path.exists(os.path.join(model_data_fp, fnm)):
-                raise OasisException("Source file {} doesn't exist".format(
+        # Check if the file exists
+        if not os.path.exists(os.path.join(model_data_fp, fnm)):
+            raise OasisException("Source file {} doesn't exist".format(
                     os.path.join(model_data_fp, fnm)))
-            try:
-                # Use symbollic link if we can
-                os.symlink(
-                    os.path.join(model_data_fp, fnm),
-                    os.path.join(model_data_dst_fp, fnm))
-                print("Linked %s" % fnm)
 
-            except OSError as why:
-                # Otherwise make a copy (probably necessary on windows)
-                if why.errno == errno.EEXIST:
-                    print("Not copying {} because file exists".format(fnm))
-                    continue
+        # Make a soft link of the file in the new folder
+        try:
+            # Use symbolic link if we can
+            os.symlink(
+                os.path.join(model_data_fp, fnm),
+                os.path.join(model_data_dst_fp, fnm))
+            print("Linked %s" % fnm)
 
-                print("Copying {} from {}".format(fnm, model_data_fp))
-                shutil.copy2(
-                    os.path.join(model_data_fp, fnm),
-                    os.path.join(model_data_dst_fp, fnm))
+        except OSError as why:
+            if why.errno == errno.EEXIST:
+                # Check if the link already exists, then do nothing
+                print("Not linking {} because file exists".format(fnm))
+                continue
+            else:
+                # Otherwise try to copy the file (probably necessary on windows)
+                try:
+                    print("Copying {} from {}".format(fnm, model_data_fp))
+                    shutil.copy2(
+                        os.path.join(model_data_fp, fnm),
+                        os.path.join(model_data_dst_fp, fnm))
+
+                except OSError as e:
+                    raise OasisException from e
+
+
+def move_input_files(run_dir, oasis_src_fp, analysis_settings):
+    """Move input files into the input folder"""
+    # Move input files into the input folder
+    oasis_dst_fp = os.path.join(run_dir, 'input')
+    try:
+        for p in os.listdir(oasis_src_fp):
+            src = os.path.join(oasis_src_fp, p)
+            if src.endswith('.tar') or src.endswith('.tar.gz'):
+                continue
+            dst = os.path.join(oasis_dst_fp, p)
+            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
+                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
+            else:
+                shutil.move(src, run_dir)
 
     except OSError as e:
         raise OasisException from e
