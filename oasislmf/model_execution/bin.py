@@ -115,7 +115,8 @@ def prepare_run_directory(
 
         # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
-        shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
+        shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and
+                                                       filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
 
         # Copy user data
         oasis_dst_fp = os.path.join(run_dir, 'input')
@@ -389,7 +390,7 @@ def create_binary_tar_file(directory):
     Package the binaries in a gzipped tar.
 
     :param directory: Path containing the binaries
-    :type tar_file_path: str
+    :type directory: str
     """
     with tarfile.open(os.path.join(directory, TAR_FILE), "w:gz") as tar:
         for f in glob.glob('{}*{}*.bin'.format(directory, os.sep)):
