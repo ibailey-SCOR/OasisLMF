@@ -142,8 +142,10 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
 
     # Check if random is required
-    if 'is_random_file' in analysis_settings and analysis_settings['is_random_file']:
-        static_files.append('random')
+    if 'model_settings' in analysis_settings:
+        if (('use_random_number_file'in analysis_settings['model_settings']) and
+            (analysis_settings['model_settings']['use_random_number_file'])):
+         static_files.append('random')
 
     # Add the bin suffix
     static_files = [f + ".bin" for f in static_files]
