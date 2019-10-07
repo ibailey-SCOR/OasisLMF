@@ -24,7 +24,6 @@ import errno
 import re
 import shutil
 import shutilwhich
-import subprocess
 import tarfile
 
 from itertools import chain
@@ -33,6 +32,7 @@ from pathlib2 import Path
 
 from ..utils.exceptions import OasisException
 from ..utils.log import oasis_log
+from ..utils.file_conversion import csvfile_to_bin
 from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
 
 @oasis_log
@@ -324,6 +324,11 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
 
     il = il or ri
 
+    if il:
+        input_files = INPUT_FILES.values()
+    else:
+        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+
     _csv_to_bin(csvdir, bindir, il)
 
     if ri:
@@ -332,31 +337,17 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
                 ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
 
 
-def _csv_to_bin(csv_directory, bin_directory, il=False):
+def _csv_to_bin(csv_directory, bin_directory, filenames,  il=False):
     """
     Create a set of binary files.
     """
     if not os.path.exists(bin_directory):
         os.mkdir(bin_directory)
 
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+    for input_file in filenames:
+        csvfile_to_bin(input_file, csv_directory, bin_directory, "")
 
-    for input_file in input_files:
-        conversion_tool = input_file['conversion_tool']
-        input_file_path = os.path.join(csv_directory, '{}.csv'.format(input_file['name']))
-        if not os.path.exists(input_file_path):
-            continue
-
-        output_file_path = os.path.join(bin_directory, '{}.bin'.format(input_file['name']))
-        cmd_str = "{} < {} > {}".format(conversion_tool, input_file_path, output_file_path)
-
-        try:
-            subprocess.check_call(cmd_str, stderr=subprocess.STDOUT, shell=True)
-        except subprocess.CalledProcessError as e:
-            raise OasisException from e
+    # Now deal with return periods, occurrences and periods
 
 
 @oasis_log
