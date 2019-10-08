@@ -619,6 +619,7 @@ class OasisManager(object):
         # Move input files into the ktools run folder
         move_input_files(model_run_fp, oasis_fp, analysis_settings)
 
+        # Generate the summaryxref files which control the level of detail in result reporting
         generate_summaryxref_files(model_run_fp,
                                    analysis_settings,
                                    gul_item_stream=gul_item_stream,
@@ -627,10 +628,13 @@ class OasisManager(object):
                                    exposure_fp=exposure_fp,
                                    accounts_fp=accounts_fp)
 
+        # Generate the binary files for the input folder
         if not ri:
+            # Without reinsurance, fairly straightforward
             fp = os.path.join(model_run_fp, 'input')
             csv_to_bin(fp, fp, il=il)
         else:
+            # With reinsurance, account for the sub-folders
             contents = os.listdir(model_run_fp)
             for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
                 csv_to_bin(fp, fp, il=True, ri=True)
@@ -657,6 +661,7 @@ class OasisManager(object):
                     with io.open(os.path.join(model_run_fp, 'input', 'ri_layers.json'), 'r', encoding='utf-8') as f:
                         ri_layers = len(json.load(f))
 
+            # Run the model
             model_runner_module.run(
                 analysis_settings,
                 number_of_processes=(ktools_num_processes or self.ktools_num_processes),
