@@ -83,6 +83,11 @@ def run(
             filename=filename
         )
 
+    # Don't attempt to run the bash script on windows
+    if os.name == "nt":
+        print("bash script {} has been generated".format(filename))
+        return
+
     try:
         bash_trace = subprocess.check_output(['bash', filename], stderr=subprocess.STDOUT)
         logging.info(bash_trace.decode('utf-8'))
