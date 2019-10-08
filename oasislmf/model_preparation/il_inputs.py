@@ -313,6 +313,11 @@ def get_il_input_items(
             drop_duplicates=True
         )
 
+        # Report on any un matched items
+        if il_inputs_df['acc_num'].isnull().any():
+            warnings.warn("{:d} input items could not be merged with acc entry".format(
+                         il_inputs_df.acc_num.isnull().sum()))
+
         # Mark the exposure dataframes for deletion
         del exposure_df
 
