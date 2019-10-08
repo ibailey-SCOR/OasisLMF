@@ -376,7 +376,8 @@ class OasisManager(object):
         fm_aggregation_profile_fp=None,
         ri_info_fp=None,
         ri_scope_fp=None,
-        oasis_files_prefixes=None
+        oasis_files_prefixes=None,
+            group_id_col="loc_id",
     ):
         # Prepare the target directory and copy the source files, profiles and
         # model version file into it
@@ -478,7 +479,8 @@ class OasisManager(object):
         gul_inputs_df = get_gul_input_items(
             exposure_df,
             _keys_fp,
-            exposure_profile=exposure_profile
+            exposure_profile=exposure_profile,
+            group_id_col=group_id_col
         )
 
         # If not in det. loss gen. scenario, write exposure summary file
