@@ -23,6 +23,7 @@ from pathlib2 import Path
 from .model_execution import runner
 from .model_execution.bin import (
     csv_to_bin,
+    csv_to_bin_model_inputs,
     prepare_run_directory,
     prepare_run_inputs,
     move_input_files,
@@ -77,6 +78,7 @@ from .utils.path import (
     setcwd,
 )
 from .utils.coverages import SUPPORTED_COVERAGE_TYPES
+from .utils.file_conversion import get_required_model_inputs
 
 pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -639,7 +641,13 @@ class OasisManager(object):
             for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
                 csv_to_bin(fp, fp, il=True, ri=True)
 
+        # Make the binaries for occurrences and return_periods
+        inputs_fp = os.path.join(model_run_fp, 'input')
+        csv_to_bin_model_inputs(csv_directory=inputs_fp, bin_directory=inputs_fp,
+                                file_list=get_required_model_inputs(analysis_settings),
+                                analysis_settings=analysis_settings)
 
+        # Check the file suffixes are removed
         prepare_run_inputs(analysis_settings, model_run_fp, ri=ri)
 
         script_fp = os.path.join(model_run_fp, 'run_ktools.sh')

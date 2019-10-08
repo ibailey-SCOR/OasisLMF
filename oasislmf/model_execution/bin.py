@@ -25,10 +25,12 @@ import re
 import shutil
 import shutilwhich
 import tarfile
+import warnings
 
 from itertools import chain
 
 from pathlib2 import Path
+import pandas as pd
 
 from ..utils.exceptions import OasisException
 from ..utils.log import oasis_log
@@ -351,6 +353,52 @@ def _csv_to_bin(csv_directory, bin_directory, filenames,  il=False):
         csvfile_to_bin(input_file, csv_directory, bin_directory, "")
 
     # Now deal with return periods, occurrences and periods
+
+@oasis_log
+def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_settings):
+    """Make sure all input .bin files are up-to-date in the input_folder"""
+
+    if not file_list:
+        print("input conversion: nothing to be done")
+        return
+
+    # # Check for conversion tools
+    # check_conversion_tools(input_files)
+
+    # Convert input files
+    for f in file_list:
+
+        # Check if csv file exists
+        csv_file = os.path.join(csv_directory, f + ".csv")
+        if not os.path.exists(csv_file):
+            raise OasisException("Necessary input file {} does not exist".format(csv_file))
+
+        # Set up command line options
+        if f == "occurrence":
+
+            # For occurrence file we need the number of periods and the format
+
+            # Read the occurrence file
+            occurrence = pd.read_csv(csv_file)
+
+            # Try and get the number of periods from the settings, otherwise, use the max
+            if 'number_of_periods' not in analysis_settings['model_settings']:
+                warnings.warn("Number of periods not specified in settings - using max")
+                number_of_periods = occurrence.period_no.max()
+            else:
+                number_of_periods = analysis_settings['model_settings']['number_of_periods']
+
+            options = ("-P%i" % number_of_periods)
+
+            # Check the occurrence file type
+            if "occ_date_id" in occurrence.columns:
+                options = options + ' -D'
+
+        else:
+            # All others, no options are needed
+            options = ""
+
+        csvfile_to_bin(f, csv_directory, bin_directory, options=options)
 
 
 @oasis_log

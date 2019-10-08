@@ -77,42 +77,49 @@ def get_required_static_files(analysis_settings):
     return static_files
 
 
-def get_required_input_files(analysis_settings):
-    """Based on config options, return a list of input data files that
-    will be required
+def get_required_model_inputs(analysis_settings):
+    """Based on config options, return a list of model input data files (not exposure related) that
+    will be required.
 
     """
 
+    # Suffix for the file from the settings file
+    model_settings = analysis_settings.get('model_settings', {})
+    setting_key = 'event_set'
+    setting_val = model_settings.get(setting_key)
+    setting_val = str(setting_val).replace(' ', '_').lower()
+    if setting_val:
+        setting_val = "_{}".format(setting_val)
+
     # Start with a list of files always required
-    input_files = ['items', 'coverages', 'gulsummaryxref', 'events']
+    input_files = ['{}{}'.format('events', setting_val)]
 
     # Check if return periods are required
     is_rp = False
+
+    # Check if occurrence is required
     is_occ = False
-    if 'gul_summaries' in analysis_settings:
-        is_rp = any('leccalc' in s and
-                    'return_period_file' in s['leccalc'] and
-                    s['leccalc']['return_period_file'] for s in analysis_settings['gul_summaries'])
-        is_occ = is_rp or any('aalcalc' in s and
-                              s['aalcalc'] for s in analysis_settings['gul_summaries'])
 
-    if 'ri' in analysis_settings:
-        is_rp = is_rp or any('leccalc' in s and s['leccalc']['return_period_file'] for s in analysis_settings['ri_summaries'])
+    for summary_type in ['gul_summaries', 'il_summaries', 'ri_summaries']:
+        if summary_type not in analysis_settings:
+            continue
 
-    # Check if we're generating insured loss
-    if 'il_output' in analysis_settings and analysis_settings['il_output']:
-        # TODO: check
-        input_files += ['fm_policytc', 'fm_profile', 'fm_programme',
-                        'fm_xref', 'fmsummaryxref']
+        # Loop through each of the summary levels requested in the analysis settings
+        for summary in analysis_settings[summary_type]:
+            if 'aalcalc' in summary:
+                is_occ = True
+            if 'leccalc' in summary:
+                is_occ = True
+                if 'return_period_file' in summary['leccalc'] and summary['leccalc']['return_period_file'] is True:
+                    is_rp = True
 
-        if 'il_summaries' in analysis_settings:
-            is_rp = is_rp or any('leccalc' in s and s['leccalc']['return_period_file'] for s in analysis_settings['il_summaries'])
+    if is_occ:
+        input_files.append('{}{}'.format('occurrence', setting_val))
 
     if is_rp:
         input_files.append('returnperiods')
 
-    if is_occ:
-        input_files.append('occurrence')
+    # TODO: periods
 
     return input_files
 
