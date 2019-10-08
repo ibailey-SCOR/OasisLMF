@@ -329,11 +329,6 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
 
     il = il or ri
 
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
-
     _csv_to_bin(csvdir, bindir, il)
 
     if ri:
@@ -342,15 +337,25 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
                 ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
 
 
-def _csv_to_bin(csv_directory, bin_directory, filenames,  il=False):
+def _csv_to_bin(csv_directory, bin_directory, il=False):
     """
-    Create a set of binary files.
+    Create a set of binary files for the files specified in INPUT_FILES (under files.py)
     """
     if not os.path.exists(bin_directory):
         os.mkdir(bin_directory)
 
-    for input_file in filenames:
-        csvfile_to_bin(input_file, csv_directory, bin_directory, "")
+    if il:
+        input_files = INPUT_FILES.values()
+    else:
+        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+
+    for input_file in input_files:
+
+        input_file_path = os.path.join(csv_directory, '{}.csv'.format(input_file['name']))
+
+        # Check if the source file exists
+        if os.path.exists(input_file_path):
+            csvfile_to_bin(input_file['name'], csv_directory, bin_directory, "")
 
     # Now deal with return periods, occurrences and periods
 
