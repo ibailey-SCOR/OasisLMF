@@ -170,17 +170,17 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
             os.symlink(
                 os.path.join(model_data_fp, fnm),
                 os.path.join(model_data_dst_fp, fnm))
-            print("Linked %s" % fnm)
+            print("\tLinking {} from {}".format(fnm, model_data_fp))
 
         except OSError as why:
             if why.errno == errno.EEXIST:
                 # Check if the link already exists, then do nothing
-                print("Not linking {} because file exists".format(fnm))
+                print("\tNot linking {} because destn file exists".format(fnm))
                 continue
             else:
                 # Otherwise try to copy the file (probably necessary on windows)
                 try:
-                    print("Copying {} from {}".format(fnm, model_data_fp))
+                    print("\tCopying {} from {}".format(fnm, model_data_fp))
                     shutil.copy2(
                         os.path.join(model_data_fp, fnm),
                         os.path.join(model_data_dst_fp, fnm))
