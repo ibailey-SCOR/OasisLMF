@@ -257,8 +257,8 @@ def get_il_input_items(
             accounts_df['layer_id'] = get_ids(accounts_df, [portfolio_num, acc_num, policy_num],
                                               group_by=[portfolio_num, acc_num])
 
-        print("\tCount of accounts having different number of layers:")
-        print(accounts_df.groupby([portfolio_num, acc_num]).layer_id.max().value_counts())
+        # print("\tCount of accounts having different number of layers:")
+        # print(accounts_df.groupby([portfolio_num, acc_num]).layer_id.max().value_counts())
 
     # Drop all columns from the accounts dataframe which are not either one of
     # portfolio num., acc. num., policy num., cond. numb., layer ID, or one of
