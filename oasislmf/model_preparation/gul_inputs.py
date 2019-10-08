@@ -137,6 +137,8 @@ def get_gul_input_items(
         'vulnerabilityid': 'uint32',
         'modeldata': 'str'
     }
+
+    # Read the keys
     keys_df = get_dataframe(
         src_fp=keys_fp,
         col_dtypes=dtypes,
@@ -185,9 +187,12 @@ def get_gul_input_items(
 
         del keys_df
 
+        # Fill the condnumber with zero if not there. This is for
+        # special conditions in the acc file.
         gul_inputs_df[cond_num].fillna(0, inplace=True)
         gul_inputs_df[cond_num] = gul_inputs_df[cond_num].astype('uint32')
 
+        # Keep only rows where at least one TIV is >0
         gul_inputs_df = gul_inputs_df[(gul_inputs_df.loc[:, tiv_cols] != 0).any(axis=1)]
         gul_inputs_df.loc[:, tiv_cols] = gul_inputs_df.loc[:, tiv_cols].where(gul_inputs_df.notnull(), 0.0)
 
@@ -235,7 +240,7 @@ def get_gul_input_items(
         gul_inputs_df = gul_inputs_df[(gul_inputs_df.loc[:, ['tiv']] != 0).any(axis=1)].reset_index()
         if gul_inputs_df.empty:
             raise OasisException(
-                'Empry gul_inputs_df dataframe after dropping rows with zero for tiv, '
+                'Empty gul_inputs_df dataframe after dropping rows with zero for tiv, '
                 'please check the exposure input files'
             )
 
