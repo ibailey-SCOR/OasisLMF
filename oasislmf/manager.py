@@ -82,6 +82,47 @@ pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
+def read_analysis_settings(analysis_settings_fp, il, ri):
+    """Read the analysis settings file"""
+
+
+    # Load analysis_settings file
+    try:
+        # Load as a json
+        with io.open(analysis_settings_fp, 'r', encoding='utf-8') as f:
+            analysis_settings = json.load(f)
+
+        # Extract the analysis_settings part within the json
+        if analysis_settings.get('analysis_settings'):
+            analysis_settings = analysis_settings['analysis_settings']
+
+    except (IOError, TypeError, ValueError):
+        raise OasisException('Invalid analysis settings file or file path: {}.'.format(
+            analysis_settings_fp))
+
+    # Make sure some aspects of the analysis settings are explicitly there
+    if not il:
+        # No insured loss output
+        analysis_settings['il_output'] = False
+        analysis_settings['il_summaries'] = []
+
+    if not ri:
+        # No reinsured loss output
+        analysis_settings['ri_output'] = False
+        analysis_settings['ri_summaries'] = []
+
+    # guard - Check if at least one output type is selected
+    if not any([
+        analysis_settings['gul_output'] if 'gul_output' in analysis_settings else False,
+        analysis_settings['il_output'] if 'il_output' in analysis_settings else False,
+        analysis_settings['ri_output'] if 'ri_output' in analysis_settings else False,
+    ]):
+        raise OasisException(
+            'No valid output settings in: {}'.format(analysis_settings_fp))
+
+    return analysis_settings
+
+
 class OasisManager(object):
 
     @oasis_log
@@ -567,16 +608,10 @@ class OasisManager(object):
             ri=ri
         )
 
-        # Load analysis_settings file
-        try:
-            analysis_settings_fn = 'analysis_settings.json'
-            _analysis_settings_fp = os.path.join(model_run_fp, analysis_settings_fn)
-            with io.open(_analysis_settings_fp, 'r', encoding='utf-8') as f:
-                analysis_settings = json.load(f)
-            if analysis_settings.get('analysis_settings'):
-                analysis_settings = analysis_settings['analysis_settings']
-        except (IOError, TypeError, ValueError):
-            raise OasisException('Invalid analysis settings file or file path: {}.'.format(_analysis_settings_fp))
+        # Read the analysis settings file
+        if not analysis_settings_fp:
+            analysis_settings_fp = os.path.join(model_run_fp, "analysis_settings.json")
+        analysis_settings = read_analysis_settings(analysis_settings_fp, il, ri)
 
         # Copy static files into the ktools run folder
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
@@ -600,22 +635,6 @@ class OasisManager(object):
             for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
                 csv_to_bin(fp, fp, il=True, ri=True)
 
-        if not il:
-            analysis_settings['il_output'] = False
-            analysis_settings['il_summaries'] = []
-
-        if not ri:
-            analysis_settings['ri_output'] = False
-            analysis_settings['ri_summaries'] = []
-
-        # guard - Check if at least one output type is selected 
-        if not any([
-            analysis_settings['gul_output'] if 'gul_output' in analysis_settings else False,
-            analysis_settings['il_output'] if 'il_output' in analysis_settings else False,
-            analysis_settings['ri_output'] if 'ri_output' in analysis_settings else False,
-        ]):
-            raise OasisException(
-                'No valid output settings in: {}'.format(analysis_settings_fp))
 
         prepare_run_inputs(analysis_settings, model_run_fp, ri=ri)
 
