@@ -650,16 +650,22 @@ class OasisManager(object):
         # Check the file suffixes are removed
         prepare_run_inputs(analysis_settings, model_run_fp, ri=ri)
 
-        script_fp = os.path.join(model_run_fp, 'run_ktools.sh')
+        # Name of the bash script
+        script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')
 
+        # Check if there is a special model runner
         if model_package_fp and os.path.exists(os.path.join(model_package_fp, 'supplier_model_runner.py')):
             path, package_name = os.path.split(model_package_fp)
             sys.path.append(path)
             model_runner_module = importlib.import_module('{}.supplier_model_runner'.format(package_name))
         else:
+            # See module runner
             model_runner_module = runner
 
-        with setcwd(model_run_fp):
+        # Change to the model run folder
+        with setcwd(os.path.abspath(model_run_fp)):
+
+            # Get the number of reinsurance layers
             ri_layers = 0
             if ri:
                 try:
