@@ -141,6 +141,9 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     """Link or copy files into the static folder
     """
 
+    # Force use of the full path for the source
+    model_data_fp = os.path.abspath(model_data_fp)
+
     # Start with list of files that are always required
     static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
 
