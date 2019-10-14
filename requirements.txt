@@ -44,7 +44,7 @@ jsonpickle==0.9.5
 markupsafe==1.0           # via jinja2
 mccabe==0.6.1             # via flake8
 mock==2.0.0
-numpy==1.14.0             # via pandas
+numpy==1.17.2             # via pandas
 packaging==19.0           # via sphinx
 pandas==0.24.1
 parameterized==0.6.1

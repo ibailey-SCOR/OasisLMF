@@ -336,19 +336,22 @@ class OasisManager(object):
         location_df = olf.get_exposure(
             lookup=lookup,
             source_exposure_fp=exposure_fp,
-        ) 
+        )
 
         utcnow = get_utctimestamp(fmt='%Y%m%d%H%M%S')
 
         keys_fp = keys_fp or '{}-keys.csv'.format(utcnow)
         keys_errors_fp = keys_errors_fp or '{}-keys-errors.csv'.format(utcnow)
+        # TODO: set `keys_success_msg` based on lookup config
+        keys_success_msg = True if complex_lookup_config_fp else False
 
         return olf.save_results(
             lookup,
             location_df=location_df,
             successes_fp=keys_fp,
             errors_fp=keys_errors_fp,
-            format=keys_format
+            format=keys_format,
+            keys_success_msg=keys_success_msg
         )
 
     @oasis_log
@@ -377,7 +380,7 @@ class OasisManager(object):
         ri_info_fp=None,
         ri_scope_fp=None,
         oasis_files_prefixes=None,
-            group_id_col="loc_id",
+        group_id_col="loc_id",
     ):
         # Prepare the target directory and copy the source files, profiles and
         # model version file into it
@@ -465,7 +468,7 @@ class OasisManager(object):
                 location_df = olf.get_exposure(
                     lookup=lookup,
                     source_exposure_fp=exposure_fp,
-                ) 
+                )
                 f1, _, f2, _ = olf.save_results(
                     lookup,
                     location_df=location_df,
@@ -665,7 +668,7 @@ class OasisManager(object):
             model_runner_module = runner
 
         # Change to the model run folder
-        with setcwd(os.path.abspath(model_run_fp)):
+        with setcwd(model_run_fp):
 
             # Get the number of reinsurance layers
             ri_layers = 0
