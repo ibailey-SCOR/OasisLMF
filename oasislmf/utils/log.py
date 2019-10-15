@@ -116,8 +116,8 @@ def oasis_log(*args, **kwargs):
 
             # Print the logger message
             logger.info(
-                "COMPLETED: {}.{} in {}m {}s".format(
-                    caller_module_name, func_name, mins, round(secs, 2)))
+                "COMPLETED: {}.{} in {:02d}m {:05.2f}s".format(
+                    caller_module_name, func_name, round(mins), round(secs, 2)))
 
             # Return the result
             return result
