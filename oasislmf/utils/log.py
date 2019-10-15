@@ -102,12 +102,24 @@ def oasis_log(*args, **kwargs):
             for key, value in kwargs.items():
                 logger.debug("    {} == {}".format(key, value))
 
+            # Get the time at the start
             start = time.time()
+
+            # Run the function
             result = func(*args, **kwargs)
+
+            # Get the time at the end
             end = time.time()
+
+            # Get the duration in mins and seconds
+            mins, secs = divmod(end - start, 60)
+
+            # Print the logger message
             logger.info(
-                "COMPLETED: {}.{} in {}s".format(
-                    caller_module_name, func_name, round(end - start, 2)))
+                "COMPLETED: {}.{} in {}m {}s".format(
+                    caller_module_name, func_name, mins, round(secs, 2)))
+
+            # Return the result
             return result
         return wrapper
 
