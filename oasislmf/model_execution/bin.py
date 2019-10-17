@@ -137,6 +137,46 @@ def prepare_run_directory(
         raise OasisException from e
 
 
+def link_or_copy_file(filename, source_folder, destination_folder):
+    """Try to create a symbolic link for a file, otherwise copy it
+
+    filename: (str) name of the file without path including suffix
+
+    source_folder: (str) folder from which to link/copy
+
+    desintation_folder: (str) folder to which we link or copy
+
+    """
+
+    # Check if the file exists
+    if not os.path.exists(os.path.join(source_folder, filename)):
+        raise OasisException("Source file {} doesn't exist".format(
+            os.path.join(source_folder, filename)))
+
+    # Make a soft link of the file in the new folder
+    try:
+        # Use symbolic link if we can
+        os.symlink(
+            os.path.join(source_folder, filename),
+            os.path.join(destination_folder, filename))
+        print("\tLinking {} from {}".format(filename, source_folder))
+
+    except OSError as why:
+        if why.errno == errno.EEXIST:
+            # Check if the link already exists, then do nothing
+            print("\tNot linking {} because destn file exists".format(filename))
+        else:
+            # Otherwise try to copy the file (probably necessary on windows)
+            try:
+                print("\tCopying {} from {}".format(filename, source_folder))
+                shutil.copy2(
+                    os.path.join(source_folder, filename),
+                    os.path.join(destination_folder, filename))
+
+            except OSError as e:
+                raise OasisException from e
+
+
 def copy_static_files(run_dir, model_data_fp, analysis_settings):
     """Link or copy files into the static folder
     """
@@ -157,39 +197,18 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     static_files = [f + ".bin" for f in static_files]
     static_files.append("footprint.idx")
 
-    # Get the destination folder Link or copy the model data into the run static folder
+    # Add the non-keys dict files if they exist
+    optional_files = ['event_dict.csv', 'intensity_bin_dict.csv']
+    for fnm in optional_files:
+        if os.path.exists(os.path.join(model_data_fp, fnm)):
+            static_files.append(fnm)
+
+    # Get the destination folder path.
     model_data_dst_fp = os.path.join(run_dir, 'static')
 
+    # Loop through each file and copy it
     for fnm in static_files:
-
-        # Check if the file exists
-        if not os.path.exists(os.path.join(model_data_fp, fnm)):
-            raise OasisException("Source file {} doesn't exist".format(
-                    os.path.join(model_data_fp, fnm)))
-
-        # Make a soft link of the file in the new folder
-        try:
-            # Use symbolic link if we can
-            os.symlink(
-                os.path.join(model_data_fp, fnm),
-                os.path.join(model_data_dst_fp, fnm))
-            print("\tLinking {} from {}".format(fnm, model_data_fp))
-
-        except OSError as why:
-            if why.errno == errno.EEXIST:
-                # Check if the link already exists, then do nothing
-                print("\tNot linking {} because destn file exists".format(fnm))
-                continue
-            else:
-                # Otherwise try to copy the file (probably necessary on windows)
-                try:
-                    print("\tCopying {} from {}".format(fnm, model_data_fp))
-                    shutil.copy2(
-                        os.path.join(model_data_fp, fnm),
-                        os.path.join(model_data_dst_fp, fnm))
-
-                except OSError as e:
-                    raise OasisException from e
+        link_or_copy_file(fnm, model_data_fp, model_data_dst_fp)
 
 
 def move_input_files(run_dir, oasis_src_fp, analysis_settings):
