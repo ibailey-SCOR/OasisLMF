@@ -408,14 +408,22 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
             # Read the occurrence file
             occurrence = pd.read_csv(csv_file)
 
-            # Try and get the number of periods from the settings, otherwise, use the max
-            if 'number_of_periods' not in analysis_settings['model_settings']:
-                warnings.warn("Number of periods not specified in settings - using max")
-                number_of_periods = occurrence.period_no.max()
-            else:
-                number_of_periods = analysis_settings['model_settings']['number_of_periods']
+            # Get the number of periods in the occurrence file. This can be overridden
+            # by analysis settings
+            n_periods = 1 + occurrence['period_no'].max() - occurrence['period_no'].min()
+            if 'number_of_periods' in analysis_settings['model_settings']:
+                user_n_periods = analysis_settings['model_settings']['number_of_periods']
 
-            options = ("-P%i" % number_of_periods)
+                # Only overwrite if user defined number is larger than the number in file
+                if  user_n_periods > n_periods:
+                    n_periods = user_n_periods
+                elif user_n_periods < n_periods:
+                    warnings.warn("User defined number of periods ({:d}) less than " +
+                                  "number in the occurrence file ({:d}). " +
+                                  "Using {:d}".format(user_n_periods, n_periods,
+                                                      n_periods))
+
+            options = ("-P%i" % n_periods)
 
             # Check the occurrence file type
             if "occ_date_id" in occurrence.columns:
