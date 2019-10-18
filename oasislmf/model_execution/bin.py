@@ -410,7 +410,7 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
         if setting_val and (f == "events" or f == "occurrence" or f == "periods"):
             csv_file = os.path.join(csv_directory, '{}{}.csv'.format(f, setting_val))
         else:
-            csv_file = os.path.join(csv_directory, f)
+            csv_file = os.path.join(csv_directory, f + ".csv")
 
         # Check if csv file exists
         if not os.path.exists(csv_file):
