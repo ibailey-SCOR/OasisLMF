@@ -418,9 +418,9 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
                 if  user_n_periods > n_periods:
                     n_periods = user_n_periods
                 elif user_n_periods < n_periods:
-                    warnings.warn("User defined number of periods ({:d}) less than " +
-                                  "number in the occurrence file ({:d}). " +
-                                  "Using {:d}".format(user_n_periods, n_periods,
+                    warnings.warn(("User defined number of periods ({:d}) less than " +
+                                   "number in the occurrence file ({:d}). " +
+                                   "Using {:d}").format(user_n_periods, n_periods,
                                                       n_periods))
 
             options = ("-P%i" % n_periods)
