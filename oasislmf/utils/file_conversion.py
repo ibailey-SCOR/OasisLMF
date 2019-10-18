@@ -83,16 +83,7 @@ def get_required_model_inputs(analysis_settings):
 
     """
 
-    # Suffix for the file from the settings file
-    model_settings = analysis_settings.get('model_settings', {})
-    setting_key = 'event_set'
-    setting_val = model_settings.get(setting_key)
-    setting_val = str(setting_val).replace(' ', '_').lower()
-    if setting_val:
-        setting_val = "_{}".format(setting_val)
-
-    # Start with a list of files always required
-    input_files = ['{}{}'.format('events', setting_val)]
+    input_files = ['events']
 
     # Check if return periods are required
     is_rp = False
@@ -262,13 +253,11 @@ def footprint_csv_to_bin(input_file_path, directory, options):
     movefile("footprint.idx", os.path.join(directory, "footprint.idx"))
 
 
-def csvfile_to_bin(filename, folder, bin_folder=None, options=""):
+def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
     """Convert a csv to bin in the same folder"""
 
     if bin_folder is None:
-        bin_folder = folder
-
-    input_file_path = os.path.join(folder, filename + ".csv")
+        bin_folder = os.path.dirname(input_file_path)
 
     # Do nothing if file isn't there
     if not os.path.exists(input_file_path):

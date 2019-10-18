@@ -396,11 +396,23 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
     # # Check for conversion tools
     # check_conversion_tools(input_files)
 
+    # Suffix for the file from the settings file
+    model_settings = analysis_settings.get('model_settings', {})
+    setting_val = model_settings.get('event_set')
+    setting_val = str(setting_val).replace(' ', '_').lower()
+    if setting_val:
+        setting_val = "_{}".format(setting_val)
+
     # Convert input files
     for f in file_list:
 
+        # Check if thee is a different file name
+        if setting_val and (f == "events" or f == "occurrence" or f == "periods"):
+            csv_file = os.path.join(csv_directory, '{}{}.csv'.format(f, setting_val))
+        else:
+            csv_file = os.path.join(csv_directory, f)
+
         # Check if csv file exists
-        csv_file = os.path.join(csv_directory, f + ".csv")
         if not os.path.exists(csv_file):
             raise OasisException("Necessary input file {} does not exist".format(csv_file))
 
@@ -419,7 +431,7 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
                 user_n_periods = analysis_settings['model_settings']['number_of_periods']
 
                 # Only overwrite if user defined number is larger than the number in file
-                if  user_n_periods > n_periods:
+                if user_n_periods > n_periods:
                     n_periods = user_n_periods
                 elif user_n_periods < n_periods:
                     warnings.warn(("User defined number of periods ({:d}) less than " +
@@ -437,7 +449,7 @@ def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_se
             # All others, no options are needed
             options = ""
 
-        csvfile_to_bin(f, csv_directory, bin_directory, options=options)
+        csvfile_to_bin(f, csv_file, bin_directory, options=options)
 
 
 @oasis_log
