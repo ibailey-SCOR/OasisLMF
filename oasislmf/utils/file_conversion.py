@@ -106,11 +106,12 @@ def get_required_model_inputs(analysis_settings):
 
         # Loop through each of the summary levels requested in the analysis settings
         for summary in analysis_settings[summary_type]:
-            if 'aalcalc' in summary:
+            if 'aalcalc' in summary and summary['aalcalc'] is True:
                 is_occ = True
-            if 'leccalc' in summary:
+            if 'leccalc' in summary and summary['leccalc'] is True:
                 is_occ = True
-                if 'return_period_file' in summary['leccalc'] and summary['leccalc']['return_period_file'] is True:
+                if ('return_period_file' in summary['leccalc'] and 
+                    summary['leccalc']['return_period_file'] is True):
                     is_rp = True
 
     if is_occ:

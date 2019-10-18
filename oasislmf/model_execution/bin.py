@@ -256,7 +256,7 @@ def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=F
 
 
 @oasis_log
-def prepare_run_inputs(analysis_settings, run_dir, ri=False):
+def prepare_run_inputs(analysis_settings, run_dir, ri=False, files=['events']):
     """
     Sets up binary files in the model inputs directory.
 
@@ -269,14 +269,18 @@ def prepare_run_inputs(analysis_settings, run_dir, ri=False):
     try:
         model_settings = analysis_settings.get('model_settings', {})
 
-        _prepare_input_bin(run_dir, 'events', model_settings, setting_key='event_set', ri=ri)
+        if 'events' in files:
+            _prepare_input_bin(run_dir, 'events', model_settings, setting_key='event_set', ri=ri)
 
-        # check
-        _prepare_input_bin(run_dir, 'returnperiods', model_settings, ri=ri)
-        _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
+        if 'returnperiods' in files:
+            _prepare_input_bin(run_dir, 'returnperiods', model_settings, ri=ri)
+        
+        if 'occurrence' in files:
+            _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
 
-        if os.path.exists(os.path.join(run_dir, 'static', 'periods.bin')):
+        if 'periods' in files:
             _prepare_input_bin(run_dir, 'periods', model_settings, ri=ri)
+
     except (OSError, IOError) as e:
         raise OasisException from e
 

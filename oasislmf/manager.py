@@ -646,14 +646,17 @@ class OasisManager(object):
             for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
                 csv_to_bin(fp, fp, il=True, ri=True)
 
+        # Get list of required input files (events, occurrence, etc.)
+        input_files = get_required_model_inputs(analysis_settings)
+
         # Make the binaries for occurrences and return_periods
         inputs_fp = os.path.join(model_run_fp, 'input')
         csv_to_bin_model_inputs(csv_directory=inputs_fp, bin_directory=inputs_fp,
-                                file_list=get_required_model_inputs(analysis_settings),
+                                file_list=input_files,
                                 analysis_settings=analysis_settings)
 
-        # Check the file suffixes are removed
-        prepare_run_inputs(analysis_settings, model_run_fp, ri=ri)
+        # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
+        prepare_run_inputs(analysis_settings, model_run_fp, ri=ri, files=input_files)
 
         # Name of the bash script
         script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')
