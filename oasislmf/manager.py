@@ -638,6 +638,7 @@ class OasisManager(object):
         # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
         input_files = prepare_run_inputs(analysis_settings, model_run_fp, ri, model_data_fp)
 
+        # TODO: Combine the csv to bin for all input files
         # Generate the binary files for the input folder
         if not ri:
             # Without reinsurance, fairly straightforward
