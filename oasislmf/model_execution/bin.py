@@ -214,14 +214,21 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
 def move_input_files(run_dir, oasis_src_fp, analysis_settings):
     """Move input files into the input folder"""
     # Move input files into the input folder
+
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
         for p in os.listdir(oasis_src_fp):
             src = os.path.join(oasis_src_fp, p)
+
+            # Don't copy an tar or tar.gz files
             if src.endswith('.tar') or src.endswith('.tar.gz'):
                 continue
+
             dst = os.path.join(oasis_dst_fp, p)
+
+            # Check if it is a reinsurance folder
             if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
+                # Make a copy if it is not a reinsurance folder
                 shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
             else:
                 shutil.move(src, run_dir)
@@ -230,33 +237,78 @@ def move_input_files(run_dir, oasis_src_fp, analysis_settings):
         raise OasisException from e
 
 
-def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=False):
+def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
 
-    # Get the file name of the expected .bin file
-    bin_fp = os.path.join(run_dir, 'input', '{}.bin'.format(bin_name))
+    # Check if the file exists already in input folder with the right name
+    if setting_val is None:
+        for suffix in ['.bin', '.csv']:
+            if os.path.exists(input_fp, filename + suffix):
+                return
 
-    # Check if the bin file doesn't yet exist
-    if not os.path.exists(bin_fp):
+    # Otherwise we will have to copy it from either a different filename or a different folder
+    if setting_val is not None:
+        srcfilename = "{}_{}".format(filename, setting_val)
+        search_folders = [input_fp, modeldata_fp]
+    else:
+        srcfilename = filename
+        search_folders = [modeldata_fp]
 
-        # Suffix for the file from the settings file
-        setting_val = model_settings.get(setting_key)
+    for folder in search_folders:
+        for suffix in [".bin", ".csv"]:
+            src_fp = os.path.join(folder, srcfilename + suffix)
+            dest_fp = os.path.join(input_fp, filename + suffix)
+            if os.path.exists(src_fp):
+                shutil.copy2(src_fp, dest_fp)
+                return
 
-        if not setting_val:
-            # look in the static folder
-            model_data_bin_fp = os.path.join(run_dir, 'static', '{}.bin'.format(bin_name))
-        else:
-            # Format for data file names
-            setting_val = str(setting_val).replace(' ', '_').lower()
-            model_data_bin_fp = os.path.join(run_dir, 'static', '{}_{}.bin'.format(bin_name, setting_val))
+    # If we get here, the file has not been found
+    raise OasisException("File {} was not found as csv or bin in {} or {}".format(
+        srcfilename, input_fp, modeldata_fp))
 
-        if not os.path.exists(model_data_bin_fp):
-            raise OasisException('Could not find {} data file: {}'.format(bin_name, model_data_bin_fp))
 
-        shutil.copyfile(model_data_bin_fp, bin_fp)
+def list_required_run_inputs(analysis_settings):
+    """Based on analysis settings, return a list of model input data files (not exposure related) that will be
+    required.
+
+    Returns a list of filenames as expected by ktools, without any file suffixes.
+    """
+
+    # Events file is always required
+    input_files = ['events']
+
+    # Check if return periods are required
+    is_rp = False
+
+    # Check if occurrence is required
+    is_occ = False
+
+    for summary_type in ['gul_summaries', 'il_summaries', 'ri_summaries']:
+        if summary_type not in analysis_settings:
+            continue
+
+        # Loop through each of the summary levels requested in the analysis settings
+        for summary in analysis_settings[summary_type]:
+            if 'aalcalc' in summary and summary['aalcalc'] is True:
+                is_occ = True
+            if 'leccalc' in summary and summary['leccalc'] is True:
+                is_occ = True
+                if ('return_period_file' in summary['leccalc'] and
+                    summary['leccalc']['return_period_file'] is True):
+                    is_rp = True
+
+    if is_occ:
+        input_files.append('occurrence')
+
+    if is_rp:
+        input_files.append('returnperiods')
+
+    # TODO: periods
+
+    return input_files
 
 
 @oasis_log
-def prepare_run_inputs(analysis_settings, run_dir, ri=False, files=['events']):
+def prepare_run_inputs(analysis_settings, run_dir, ri=False, model_data_fp=None):
     """
     Sets up binary files in the model inputs directory.
 
@@ -266,24 +318,36 @@ def prepare_run_inputs(analysis_settings, run_dir, ri=False, files=['events']):
     :param run_dir: model run directory
     :type run_dir: str
     """
+
+    # Get a list of the input files that are needed
+    file_list = list_required_run_inputs(analysis_settings)
+
+    # Get model settings, which has any filename identifier for specific set of events/occurrences
+    model_settings = analysis_settings.get('model_settings', {})
+
+    # Get the destination path
+    destn_path = os.path.join(run_dir, 'input')
+
     try:
-        model_settings = analysis_settings.get('model_settings', {})
 
-        if 'events' in files:
-            _prepare_input_bin(run_dir, 'events', model_settings, setting_key='event_set', ri=ri)
+        if 'events' in file_list:
+            setting_val = str(model_settings.get('event_set')).replace(' ', '_').lower()
+            copy_run_input_file('events', setting_val, destn_path, model_data_fp)
 
-        if 'returnperiods' in files:
-            _prepare_input_bin(run_dir, 'returnperiods', model_settings, ri=ri)
+        if 'returnperiods' in file_list:
+            copy_run_input_file('returnperiods', None, destn_path, model_data_fp)
         
-        if 'occurrence' in files:
-            _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
+        if 'occurrence' in file_list:
+            setting_val = str(model_settings.get('event_occurrence_id')).replace(' ', '_').lower()
+            copy_run_input_file('occurrence', setting_val, destn_path, model_data_fp)
 
-        if 'periods' in files:
-            _prepare_input_bin(run_dir, 'periods', model_settings, ri=ri)
+        if 'periods' in file_list:
+            copy_run_input_file('periods', setting_val, destn_path, model_data_fp)
 
     except (OSError, IOError) as e:
         raise OasisException from e
 
+    return file_list
 
 @oasis_log
 def check_inputs_directory(directory_to_check, il=False, ri=False, check_binaries=True):

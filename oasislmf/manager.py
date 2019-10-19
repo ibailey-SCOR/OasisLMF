@@ -25,6 +25,7 @@ from .model_execution.bin import (
     csv_to_bin,
     csv_to_bin_model_inputs,
     prepare_run_directory,
+    list_required_run_inputs,
     prepare_run_inputs,
     move_input_files,
     copy_static_files,
@@ -78,7 +79,6 @@ from .utils.path import (
     setcwd,
 )
 from .utils.coverages import SUPPORTED_COVERAGE_TYPES
-from .utils.file_conversion import get_required_model_inputs
 
 pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -620,10 +620,10 @@ class OasisManager(object):
             analysis_settings_fp = os.path.join(model_run_fp, "analysis_settings.json")
         analysis_settings = read_analysis_settings(analysis_settings_fp, il, ri)
 
-        # Copy static files into the ktools run folder
+        # Copy static files into the "static" sub-folder of the ktools run folder
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
 
-        # Move input files into the ktools run folder
+        # Move input files into the "input" sub-folder of the ktools run folder
         move_input_files(model_run_fp, oasis_fp, analysis_settings)
 
         # Generate the summaryxref files which control the level of detail in result reporting
@@ -635,6 +635,9 @@ class OasisManager(object):
                                    exposure_fp=exposure_fp,
                                    accounts_fp=accounts_fp)
 
+        # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
+        input_files = prepare_run_inputs(analysis_settings, model_run_fp, ri, model_data_fp)
+
         # Generate the binary files for the input folder
         if not ri:
             # Without reinsurance, fairly straightforward
@@ -643,11 +646,11 @@ class OasisManager(object):
         else:
             # With reinsurance, account for the sub-folders
             contents = os.listdir(model_run_fp)
-            for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
+            for fp in [
+                os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)
+                ]:
                 csv_to_bin(fp, fp, il=True, ri=True)
 
-        # Get list of required input files (events, occurrence, etc.)
-        input_files = get_required_model_inputs(analysis_settings)
 
         # Make the binaries for occurrences and return_periods
         inputs_fp = os.path.join(model_run_fp, 'input')
@@ -655,8 +658,6 @@ class OasisManager(object):
                                 file_list=input_files,
                                 analysis_settings=analysis_settings)
 
-        # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
-        prepare_run_inputs(analysis_settings, model_run_fp, ri=ri, files=input_files)
 
         # Name of the bash script
         script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')

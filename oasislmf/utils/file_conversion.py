@@ -77,45 +77,6 @@ def get_required_static_files(analysis_settings):
     return static_files
 
 
-def get_required_model_inputs(analysis_settings):
-    """Based on config options, return a list of model input data files (not exposure related) that
-    will be required.
-
-    """
-
-    input_files = ['events']
-
-    # Check if return periods are required
-    is_rp = False
-
-    # Check if occurrence is required
-    is_occ = False
-
-    for summary_type in ['gul_summaries', 'il_summaries', 'ri_summaries']:
-        if summary_type not in analysis_settings:
-            continue
-
-        # Loop through each of the summary levels requested in the analysis settings
-        for summary in analysis_settings[summary_type]:
-            if 'aalcalc' in summary and summary['aalcalc'] is True:
-                is_occ = True
-            if 'leccalc' in summary and summary['leccalc'] is True:
-                is_occ = True
-                if ('return_period_file' in summary['leccalc'] and 
-                    summary['leccalc']['return_period_file'] is True):
-                    is_rp = True
-
-    if is_occ:
-        input_files.append('{}{}'.format('occurrence', setting_val))
-
-    if is_rp:
-        input_files.append('returnperiods')
-
-    # TODO: periods
-
-    return input_files
-
-
 def check_new_bin_needed(filename, csv_directory, bin_directory=None):
     """Return true if a conversion should and can be done
 
