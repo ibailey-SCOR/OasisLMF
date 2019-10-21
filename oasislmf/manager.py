@@ -23,11 +23,9 @@ from pathlib2 import Path
 from .model_execution import runner
 from .model_execution.bin import (
     csv_to_bin,
-    csv_to_bin_model_inputs,
     prepare_run_directory,
-    list_required_run_inputs,
     prepare_run_inputs,
-    move_input_files,
+    copy_input_files,
     copy_static_files,
 )
 from .model_preparation.gul_inputs import (
@@ -84,7 +82,7 @@ pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-def read_analysis_settings(analysis_settings_fp, il, ri):
+def read_analysis_settings(analysis_settings_fp, check_il=False, check_ri=False):
     """Read the analysis settings file"""
 
 
@@ -103,12 +101,12 @@ def read_analysis_settings(analysis_settings_fp, il, ri):
             analysis_settings_fp))
 
     # Make sure some aspects of the analysis settings are explicitly there
-    if not il:
+    if not check_il:
         # No insured loss output
         analysis_settings['il_output'] = False
         analysis_settings['il_summaries'] = []
 
-    if not ri:
+    if not check_ri:
         # No reinsured loss output
         analysis_settings['ri_output'] = False
         analysis_settings['ri_summaries'] = []
@@ -624,7 +622,7 @@ class OasisManager(object):
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
 
         # Move input files into the "input" sub-folder of the ktools run folder
-        move_input_files(model_run_fp, oasis_fp, analysis_settings)
+        copy_input_files(model_run_fp, oasis_fp)
 
         # Generate the summaryxref files which control the level of detail in result reporting
         generate_summaryxref_files(model_run_fp,
@@ -634,6 +632,9 @@ class OasisManager(object):
                                    ri=ri,
                                    exposure_fp=exposure_fp,
                                    accounts_fp=accounts_fp)
+
+        # "Run inputs" are the input files specific to the analysis and settings,
+        # i.e. events, occurrences, return_periods, periods
 
         # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
         input_files = prepare_run_inputs(analysis_settings, model_run_fp, ri, model_data_fp)
@@ -655,9 +656,9 @@ class OasisManager(object):
 
         # Make the binaries for occurrences and return_periods
         inputs_fp = os.path.join(model_run_fp, 'input')
-        csv_to_bin_model_inputs(csv_directory=inputs_fp, bin_directory=inputs_fp,
-                                file_list=input_files,
-                                analysis_settings=analysis_settings)
+        #csv_to_bin_model_inputs(csv_directory=inputs_fp, bin_directory=inputs_fp,
+        #                        file_list=input_files,
+        #                        analysis_settings=analysis_settings)
 
 
         # Name of the bash script

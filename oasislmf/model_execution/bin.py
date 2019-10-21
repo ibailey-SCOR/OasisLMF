@@ -1,18 +1,17 @@
 """
-    Python utilities used for setting up the structure of the run directory
+    Python utilities used for setting up the structure of the run directory.
     in which to prepare the inputs to run a model or generate deterministic
     losses, and store the outputs.
 """
 __all__ = [
     'check_binary_tar_file',
-    'check_conversion_tools',
     'check_inputs_directory',
     'cleanup_bin_directory',
     'create_binary_tar_file',
     'csv_to_bin',
     'prepare_run_directory',
     'prepare_run_inputs',
-    'move_input_files',
+    'copy_input_files',
     'copy_static_files'
 ]
 
@@ -23,19 +22,34 @@ import os
 import errno
 import re
 import shutil
-import shutilwhich
 import tarfile
-import warnings
 
 from itertools import chain
 
 from pathlib2 import Path
-import pandas as pd
 
 from ..utils.exceptions import OasisException
-from ..utils.log import oasis_log
 from ..utils.file_conversion import csvfile_to_bin
+from ..utils.log import oasis_log
 from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
+
+# List of all the oasis files and relevant name of executable for conversion
+CONVERSION_TOOLS = {
+    'items': 'itemtobin',
+    'coverages': 'coveragetobin',
+    'gulsummaryxref': 'gulsummaryxreftobin',
+    'events': 'evetobin',
+    'returnperiods': 'returnperiodtobin',
+    'occurrence': 'occurrencetobin',
+    'fm_policytc': 'fmpolicytctobin',
+    'fm_profile': 'fmprofiletobin',
+    'fm_programme': 'fmprogrammetobin',
+    'fm_xref': 'fmxreftobin',
+    'fmsummaryxref': 'fmsummaryxreftobin',
+    'footprint': 'footprinttobin',
+    'vulnerability': 'vulnerabilitytobin',
+    'damage_bin_dict': 'damagebintobin',
+    'random': 'randtobin'}
 
 @oasis_log
 def prepare_run_directory(
@@ -211,9 +225,8 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
         link_or_copy_file(fnm, model_data_fp, model_data_dst_fp)
 
 
-def move_input_files(run_dir, oasis_src_fp, analysis_settings):
-    """Move input files into the input folder"""
-    # Move input files into the input folder
+def copy_input_files(run_dir, oasis_src_fp):
+    """Copy all input files in the source folder into the input folder"""
 
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
@@ -237,35 +250,6 @@ def move_input_files(run_dir, oasis_src_fp, analysis_settings):
         raise OasisException from e
 
 
-def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
-
-    # Check if the file exists already in input folder with the right name
-    if setting_val is None:
-        for suffix in ['.bin', '.csv']:
-            if os.path.exists(input_fp, filename + suffix):
-                return
-
-    # Otherwise we will have to copy it from either a different filename or a different folder
-    if setting_val is not None:
-        srcfilename = "{}_{}".format(filename, setting_val)
-        search_folders = [input_fp, modeldata_fp]
-    else:
-        srcfilename = filename
-        search_folders = [modeldata_fp]
-
-    for folder in search_folders:
-        for suffix in [".bin", ".csv"]:
-            src_fp = os.path.join(folder, srcfilename + suffix)
-            dest_fp = os.path.join(input_fp, filename + suffix)
-            if os.path.exists(src_fp):
-                shutil.copy2(src_fp, dest_fp)
-                return
-
-    # If we get here, the file has not been found
-    raise OasisException("File {} was not found as csv or bin in {} or {}".format(
-        srcfilename, input_fp, modeldata_fp))
-
-
 def list_required_run_inputs(analysis_settings):
     """Based on analysis settings, return a list of model input data files (not exposure related) that will be
     required.
@@ -276,10 +260,8 @@ def list_required_run_inputs(analysis_settings):
     # Events file is always required
     input_files = ['events']
 
-    # Check if return periods are required
+    # Flag for if return periods and occurrences files are required
     is_rp = False
-
-    # Check if occurrence is required
     is_occ = False
 
     for summary_type in ['gul_summaries', 'il_summaries', 'ri_summaries']:
@@ -288,10 +270,14 @@ def list_required_run_inputs(analysis_settings):
 
         # Loop through each of the summary levels requested in the analysis settings
         for summary in analysis_settings[summary_type]:
+
+            # Occurrence is needed for AAL or loss-exceedance curve outputs
             if 'aalcalc' in summary and summary['aalcalc'] is True:
                 is_occ = True
             if 'leccalc' in summary and summary['leccalc'] is True:
                 is_occ = True
+
+                # Return period is needed if flagged in analysis settings
                 if ('return_period_file' in summary['leccalc'] and
                     summary['leccalc']['return_period_file'] is True):
                     is_rp = True
@@ -307,6 +293,38 @@ def list_required_run_inputs(analysis_settings):
     return input_files
 
 
+def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
+    """ Copy a run input file into the model run "input" folder and rename it if
+    necessary. We allow bin or csv files.
+
+    """
+
+    # Check if the file exists already in input folder with the right name
+    if not setting_val:
+        for suffix in ['.bin', '.csv']:
+            if os.path.exists(os.path.join(input_fp, filename + suffix)):
+                return
+
+    # Otherwise we will have to copy it from either a different filename or a different folder
+    if not setting_val:
+        srcfilename = filename
+        search_folders = [modeldata_fp]
+    else:
+        srcfilename = "{}_{}".format(filename, setting_val)
+        search_folders = [input_fp, modeldata_fp]
+
+    for folder in search_folders:
+        for suffix in [".bin", ".csv"]:
+            src_fp = os.path.join(folder, srcfilename + suffix)
+            dest_fp = os.path.join(input_fp, filename + suffix)
+            if os.path.exists(src_fp):
+                shutil.copy2(src_fp, dest_fp)
+                return
+
+    # If we get here, the file has not been found
+    raise OasisException("File {} was not found as csv or bin in {} or {}".format(
+        srcfilename, input_fp, modeldata_fp))
+
 @oasis_log
 def prepare_run_inputs(analysis_settings, run_dir, ri=False, model_data_fp=None):
     """
@@ -319,27 +337,30 @@ def prepare_run_inputs(analysis_settings, run_dir, ri=False, model_data_fp=None)
     :type run_dir: str
     """
 
-    # Get a list of the input files that are needed
+    # Get a list of the run-input files that are needed
     file_list = list_required_run_inputs(analysis_settings)
 
     # Get model settings, which has any filename identifier for specific set of events/occurrences
     model_settings = analysis_settings.get('model_settings', {})
-
+    setting_val = None
     # Get the destination path
     destn_path = os.path.join(run_dir, 'input')
 
     try:
 
         if 'events' in file_list:
-            setting_val = str(model_settings.get('event_set')).replace(' ', '_').lower()
+            if 'event_set' in model_settings:
+                setting_val = str(model_settings.get('event_set')).replace(' ', '_').lower()
             copy_run_input_file('events', setting_val, destn_path, model_data_fp)
 
         if 'returnperiods' in file_list:
             copy_run_input_file('returnperiods', None, destn_path, model_data_fp)
         
         if 'occurrence' in file_list:
-            setting_val = str(model_settings.get('event_occurrence_id')).replace(' ', '_').lower()
-            copy_run_input_file('occurrence', setting_val, destn_path, model_data_fp)
+            if 'event_occurrence_id' in model_settings:
+                setting_val = str(model_settings.get('event_occurrence_id')).replace(' ', '_').lower()
+            copy_run_input_file('occurrence', setting_val, destn_path,
+                                model_data_fp)
 
         if 'periods' in file_list:
             copy_run_input_file('periods', setting_val, destn_path, model_data_fp)
@@ -419,12 +440,22 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
 
     il = il or ri
 
-    _csv_to_bin(csvdir, bindir, il)
+    # TODO: get a list of required files
 
-    if ri:
-        for ri_csvdir in glob.glob('{}{}RI_[0-9]*'.format(csvdir, os.sep)):
-            _csv_to_bin(
-                ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
+    # TODO: add the run_input files needed
+    #_csv_to_bin(csvdir, bindir, il)
+
+    if il:
+        input_files = INPUT_FILES.values()
+    else:
+        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+
+    print(input_files)
+
+    #if ri:
+    #    for ri_csvdir in glob.glob('{}{}RI_[0-9]*'.format(csvdir, os.sep)):
+    #        _csv_to_bin(
+    #            ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
 
 
 def _csv_to_bin(csv_directory, bin_directory, il=False):
@@ -449,71 +480,6 @@ def _csv_to_bin(csv_directory, bin_directory, il=False):
 
     # Now deal with return periods, occurrences and periods
 
-@oasis_log
-def csv_to_bin_model_inputs(csv_directory, bin_directory, file_list, analysis_settings):
-    """Make sure all input .bin files are up-to-date in the input_folder"""
-
-    if not file_list:
-        print("input conversion: nothing to be done")
-        return
-
-    # # Check for conversion tools
-    # check_conversion_tools(input_files)
-
-    # Suffix for the file from the settings file
-    model_settings = analysis_settings.get('model_settings', {})
-    setting_val = model_settings.get('event_set')
-    setting_val = str(setting_val).replace(' ', '_').lower()
-    if setting_val:
-        setting_val = "_{}".format(setting_val)
-
-    # Convert input files
-    for f in file_list:
-
-        # Check if thee is a different file name
-        if setting_val and (f == "events" or f == "occurrence" or f == "periods"):
-            csv_file = os.path.join(csv_directory, '{}{}.csv'.format(f, setting_val))
-        else:
-            csv_file = os.path.join(csv_directory, f + ".csv")
-
-        # Check if csv file exists
-        if not os.path.exists(csv_file):
-            raise OasisException("Necessary input file {} does not exist".format(csv_file))
-
-        # Set up command line options
-        if f == "occurrence":
-
-            # For occurrence file we need the number of periods and the format
-
-            # Read the occurrence file
-            occurrence = pd.read_csv(csv_file)
-
-            # Get the number of periods in the occurrence file. This can be overridden
-            # by analysis settings
-            n_periods = 1 + occurrence['period_no'].max() - occurrence['period_no'].min()
-            if 'number_of_periods' in analysis_settings['model_settings']:
-                user_n_periods = analysis_settings['model_settings']['number_of_periods']
-
-                # Only overwrite if user defined number is larger than the number in file
-                if user_n_periods > n_periods:
-                    n_periods = user_n_periods
-                elif user_n_periods < n_periods:
-                    warnings.warn(("User defined number of periods ({:d}) less than " +
-                                   "number in the occurrence file ({:d}). " +
-                                   "Using {:d}").format(user_n_periods, n_periods,
-                                                      n_periods))
-
-            options = ("-P%i" % n_periods)
-
-            # Check the occurrence file type
-            if "occ_date_id" in occurrence.columns:
-                options = options + ' -D'
-
-        else:
-            # All others, no options are needed
-            options = ""
-
-        csvfile_to_bin(f, csv_file, bin_directory, options=options)
 
 
 @oasis_log
@@ -567,32 +533,6 @@ def create_binary_tar_file(directory):
 
 
 @oasis_log
-def check_conversion_tools(il=False):
-    """
-    Check that the conversion tools are available
-
-    :param il: Flag whether to check insured loss tools
-    :type il: bool
-
-    :return: True if all required tools are present, False otherwise
-    :rtype: bool
-    """
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
-
-    for input_file in input_files:
-        tool = input_file['conversion_tool']
-        if shutilwhich.which(tool) is None:
-            error_message = "Failed to find conversion tool: {}".format(tool)
-            logging.error(error_message)
-            raise OasisException(error_message)
-
-    return True
-
-
-@oasis_log
 def cleanup_bin_directory(directory):
     """
     Clean the tar and binary files.
@@ -601,3 +541,5 @@ def cleanup_bin_directory(directory):
         file_path = os.path.join(directory, file)
         if os.path.exists(file_path):
             os.remove(file_path)
+
+

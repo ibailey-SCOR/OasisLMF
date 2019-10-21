@@ -30,17 +30,13 @@ CONVERSION_TOOLS = {
     'random': 'randtobin'}
 
 
-def check_conversion_tools(filenamelist=None, is_quiet=False):
+def check_conversion_tools(filenamelist=None):
     """
     Check that the conversion tools are available
     """
 
     if filenamelist is None:
         filenamelist = CONVERSION_TOOLS.keys()
-
-    is_ok = True
-    if not is_quiet:
-        print("Checking conversion tools")
 
     for input_file in filenamelist:
         tool = CONVERSION_TOOLS[input_file]
@@ -52,96 +48,6 @@ def check_conversion_tools(filenamelist=None, is_quiet=False):
             # print(error_message)
             # is_ok = False
             # #raise OasisException(error_message)
-        else:
-            if not is_quiet:
-                print("%s: OK" % tool)
-
-    return is_ok
-
-
-def get_required_static_files(analysis_settings):
-    """Based on config options, return a list of static data files that
-    will be required.
-
-    """
-
-    # Start with list of files that are always required
-    static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
-
-    # Check if random is required
-    if 'model_settings' in analysis_settings:
-        if (('use_random_number_file'in analysis_settings['model_settings']) and
-                (analysis_settings['model_settings']['use_random_number_file'])):
-         static_files.append('random')
-
-    return static_files
-
-
-def check_new_bin_needed(filename, csv_directory, bin_directory=None):
-    """Return true if a conversion should and can be done
-
-    csv file exists and
-    EITHER .bin file doesn't exist or is older
-
-    """
-
-    # Default bin directory is the same as the csv folder
-    if bin_directory is None:
-        bin_directory = csv_directory
-
-    # Define folder names
-    csvfile = os.path.join(csv_directory, filename + '.csv')
-    binfile = os.path.join(bin_directory, filename + '.bin')
-
-    # Special case for footprint which also requires idx file
-    idxfile = os.path.join(bin_directory, filename + '.idx')
-
-    # Check if a newer bin file is needed
-    is_needed = False
-    if os.path.exists(csvfile):
-        if not os.path.exists(binfile):
-            # Only the csv exists so we must generate the bin
-            is_needed = True
-
-        elif filename == "footprint" and not os.path.exists(idxfile):
-            # footprint.bin exists but not the footprint.idx... we must generate both
-            is_needed = True
-
-        else:
-            # Check if the csv file is newer. If not, is_needed is false
-            if filename == "footprint":
-                is_needed = ((os.path.getmtime(csvfile) > os.path.getmtime(binfile)) or
-                             (os.path.getmtime(csvfile) > os.path.getmtime(idxfile)))
-            else:
-                is_needed = os.path.getmtime(csvfile) > os.path.getmtime(binfile)
-    else:
-        # Only the bin exists, so we must rely on it
-        if not os.path.exists(binfile):
-            # Neither file exists. Raise a warning
-            warnings.warn("Neither %s.csv or %s.bin exist" %
-                          (filename, filename))
-
-        if filename == "footprint" and not os.path.exists(idxfile):
-            warnings.warn("Neither %s.csv or %s.idx exist" %
-                          (filename, filename))
-
-    return is_needed
-
-
-def get_necessary_conversions(fileprefixes, csv_folder, bin_folder=None):
-    """Return a list on file prefixes for which a csv to bin conversion is
-    necessary. Each is evaluated based on the function
-    'new_bin_is_needed'.
-
-    """
-
-    newfileprefixes = []
-
-    for f in fileprefixes:
-        if check_new_bin_needed(f, csv_folder, bin_folder):
-            newfileprefixes.append(f)
-
-    return newfileprefixes
 
 
 def clean_bins(directory, filelist=None, check_csv=True, csv_folder=None):
@@ -177,9 +83,63 @@ def clean_bins(directory, filelist=None, check_csv=True, csv_folder=None):
             os.remove(file_path + ".idx")
 
 
+def is_new_bin_needed(filename, csv_directory, bin_directory=None):
+    """Return true if a conversion should and can be done
+
+    csv file exists and
+    EITHER .bin file doesn't exist or is older
+
+    """
+
+    # Default bin directory is the same as the csv folder
+    if bin_directory is None:
+        bin_directory = csv_directory
+
+    # Define file names
+    csvfile = os.path.join(csv_directory, filename + '.csv')
+    binfile = os.path.join(bin_directory, filename + '.bin')
+
+    # Special case for footprint which also requires idx file
+    idxfile = os.path.join(bin_directory, filename + '.idx')
+
+    # Check if a newer bin file is needed
+    is_needed = False
+    if os.path.exists(csvfile):
+        if not os.path.exists(binfile):
+            # Only the csv exists so we must generate the bin
+            is_needed = True
+
+        elif filename == "footprint" and not os.path.exists(idxfile):
+            # footprint.bin exists but not the footprint.idx... we must generate both
+            is_needed = True
+
+        else:
+            # Check if the csv file is newer. If not, is_needed is false
+            if filename == "footprint":
+                is_needed = ((os.path.getmtime(csvfile) > os.path.getmtime(binfile)) or
+                             (os.path.getmtime(csvfile) > os.path.getmtime(idxfile)))
+                # TODO: Case where bin and idx are different times
+            else:
+                is_needed = os.path.getmtime(csvfile) > os.path.getmtime(binfile)
+    else:
+        # Only the bin exists, so we must rely on it
+        if not os.path.exists(binfile):
+            # Neither file exists. Raise a warning
+            warnings.warn("Neither %s.csv or %s.bin exist" %
+                          (filename, filename))
+
+        if filename == "footprint" and not os.path.exists(idxfile):
+            warnings.warn("Neither %s.csv or %s.idx exist" %
+                          (filename, filename))
+
+    return is_needed
+
+
 def footprint_csv_to_bin(input_file_path, directory, options):
-    """Convert the footprint file to binary
-    Options
+    """Convert the footprint file to binary. This is a special case because two files
+    are generated... footprint.bin and footprint.idx
+
+    Options for footprinttobin
     -i max intensity bins
     -n No intensity uncertainty
     -s skip header
@@ -189,7 +149,7 @@ def footprint_csv_to_bin(input_file_path, directory, options):
                                   options,
                                   input_file_path)
 
-    print(cmd_str)
+    # print(cmd_str)
 
     # Run the command
     try:
@@ -199,8 +159,11 @@ def footprint_csv_to_bin(input_file_path, directory, options):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT,
                                 universal_newlines=True)
-        print(proc.stdout.read())
-        # proc.communicate()
+
+        stdout_text = proc.stdout.read().strip()
+        if stdout_text:
+            print("STDOUT:\n{}".format(stdout_text))
+
     except subprocess.CalledProcessError as e:
         raise Exception(e)
 
@@ -215,7 +178,7 @@ def footprint_csv_to_bin(input_file_path, directory, options):
 
 
 def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
-    """Convert a csv to bin in the same folder"""
+    """Convert a csv to bin file"""
 
     if bin_folder is None:
         bin_folder = os.path.dirname(input_file_path)
@@ -251,7 +214,7 @@ def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
                                 universal_newlines=True)
         stdout_text = proc.stdout.read().strip()
         if stdout_text:
-            print(stdout_text)
+            print("STDOUT:\n{}".format(stdout_text))
         # proc.communicate()
     except subprocess.CalledProcessError as e:
         raise Exception(e)
@@ -259,18 +222,53 @@ def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
     return
 
 
-def update_static_bin_files(static_folder, static_files, is_intensity_uncertainty=False, is_force=False):
-    """Make sure all static .bin files are up-to-date in the static_folder"""
-    if is_force:
-        clean_bins(static_folder)
+def get_required_static_files(analysis_settings):
+    """Based on config options, return a list of static data files that
+    will be required.
 
-    # Get which files need updating
-    static_files = get_necessary_conversions(static_files,
-                                             static_folder)
+    """
+
+    # Start with list of files that are always required
+    static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
+
+    # Check if random is required
+    if 'model_settings' in analysis_settings:
+        if (('use_random_number_file'in analysis_settings['model_settings']) and
+                (analysis_settings['model_settings']['use_random_number_file'])):
+         static_files.append('random')
+
+    return static_files
+
+
+def get_necessary_conversions(fileprefixes, csv_folder, bin_folder=None):
+    """Return a list on file prefixes for which a csv to bin conversion is
+    necessary. Each is evaluated based on the function
+    'new_bin_is_needed'.
+
+    """
+
+    newfileprefixes = []
+
+    for f in fileprefixes:
+        if is_new_bin_needed(f, csv_folder, bin_folder):
+            newfileprefixes.append(f)
+
+    return newfileprefixes
+
+
+def update_static_bin_files(static_folder, static_files, is_intensity_uncertainty=False,
+                            is_force=False):
+    """Make sure all static .bin files are up-to-date in the static_folder"""
+
+    if not is_force:
+        # Get which files need updating
+        static_files = get_necessary_conversions(static_files, static_folder)
 
     if not static_files:
         print("static conversion: nothing to be done")
         return
+    else:
+        print("Files to be updated: {}".format(static_files))
 
     # Check for conversion tools
     check_conversion_tools(static_files)
@@ -305,6 +303,11 @@ def update_static_bin_files(static_folder, static_files, is_intensity_uncertaint
             # All others, no options are needed
             options = ""
 
-        csvfile_to_bin(f, static_folder, options=options)
+        csv_filename = os.path.join(static_folder, f + ".csv")
+
+        print("\tConverting csv -> bin for {}".format(csv_filename))
+        csvfile_to_bin(f, csv_filename, static_folder, options=options)
 
     return
+
+
