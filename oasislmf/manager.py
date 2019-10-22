@@ -639,27 +639,21 @@ class OasisManager(object):
         # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
         input_files = prepare_run_inputs(analysis_settings, model_run_fp, ri, model_data_fp)
 
-        # TODO: Combine the csv to bin for all input files
         # Generate the binary files for the input folder
         if not ri:
             # Without reinsurance, fairly straightforward
             fp = os.path.join(model_run_fp, 'input')
-            csv_to_bin(fp, fp, il=il)
+            csv_to_bin(fp, fp, input_files, il,
+                       ri=False,
+                       analysis_settings=analysis_settings)
         else:
             # With reinsurance, account for the sub-folders
             contents = os.listdir(model_run_fp)
             for fp in [
                 os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)
                 ]:
-                csv_to_bin(fp, fp, il=True, ri=True)
-
-
-        # Make the binaries for occurrences and return_periods
-        inputs_fp = os.path.join(model_run_fp, 'input')
-        #csv_to_bin_model_inputs(csv_directory=inputs_fp, bin_directory=inputs_fp,
-        #                        file_list=input_files,
-        #                        analysis_settings=analysis_settings)
-
+                csv_to_bin(fp, fp, input_files, il=True, ri=True,
+                           analysis_settings=analysis_settings)
 
         # Name of the bash script
         script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')

@@ -15,7 +15,6 @@ INPUT_FILES = {
     'items': {'name': 'items', 'type': 'gul', 'conversion_tool': 'itemtobin'},
     'coverages': {'name': 'coverages', 'type': 'gul', 'conversion_tool': 'coveragetobin'},
     'gulsummaryxref': {'name': 'gulsummaryxref', 'type': 'gul', 'conversion_tool': 'gulsummaryxreftobin'},
-    'events': {'name': 'events', 'type': 'optional', 'conversion_tool': 'evetobin'},
     'fm_policytc': {'name': 'fm_policytc', 'type': 'il', 'conversion_tool': 'fmpolicytctobin'},
     'fm_profile': {'name': 'fm_profile', 'type': 'il', 'conversion_tool': 'fmprofiletobin'},
     'fm_programme': {'name': 'fm_programme', 'type': 'il', 'conversion_tool': 'fmprogrammetobin'},

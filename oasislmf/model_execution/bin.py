@@ -29,27 +29,12 @@ from itertools import chain
 from pathlib2 import Path
 
 from ..utils.exceptions import OasisException
-from ..utils.file_conversion import csvfile_to_bin
+from ..utils.file_conversion import (csvfile_to_bin,
+                                     get_necessary_conversions,
+                                     get_occurrence_csvtobin_options)
 from ..utils.log import oasis_log
 from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
 
-# List of all the oasis files and relevant name of executable for conversion
-CONVERSION_TOOLS = {
-    'items': 'itemtobin',
-    'coverages': 'coveragetobin',
-    'gulsummaryxref': 'gulsummaryxreftobin',
-    'events': 'evetobin',
-    'returnperiods': 'returnperiodtobin',
-    'occurrence': 'occurrencetobin',
-    'fm_policytc': 'fmpolicytctobin',
-    'fm_profile': 'fmprofiletobin',
-    'fm_programme': 'fmprogrammetobin',
-    'fm_xref': 'fmxreftobin',
-    'fmsummaryxref': 'fmsummaryxreftobin',
-    'footprint': 'footprinttobin',
-    'vulnerability': 'vulnerabilitytobin',
-    'damage_bin_dict': 'damagebintobin',
-    'random': 'randtobin'}
 
 @oasis_log
 def prepare_run_directory(
@@ -417,7 +402,8 @@ def _check_each_inputs_directory(directory_to_check, il=False, check_binaries=Tr
 
 
 @oasis_log
-def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
+def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False,
+               analysis_settings=None):
     """
     Create the binary files.
 
@@ -446,40 +432,41 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
     #_csv_to_bin(csvdir, bindir, il)
 
     if il:
-        input_files = INPUT_FILES.values()
+        # If insured loss, then consider all files
+        input_files0 = [f['name'] for f in INPUT_FILES.values()]
     else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+        # If GUL loss, don't consider those flagged as 'il'
+        input_files0 = [f for f in INPUT_FILES.values() if f['type'] != 'il']
 
-    print(input_files)
+    # Append the run input files
+    input_files = input_files0 + run_input_files
 
-    #if ri:
-    #    for ri_csvdir in glob.glob('{}{}RI_[0-9]*'.format(csvdir, os.sep)):
-    #        _csv_to_bin(
-    #            ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
+    # Check which conversions are needed
+    input_files = get_necessary_conversions(input_files, csvdir, bindir)
 
+    if not input_files:
+        # If no conversions are necessary, print a message and exit
+        print("input csv_to_bin: no conversions needed")
+        return
 
-def _csv_to_bin(csv_directory, bin_directory, il=False):
-    """
-    Create a set of binary files for the files specified in INPUT_FILES (under files.py)
-    """
-    if not os.path.exists(bin_directory):
-        os.mkdir(bin_directory)
+    # Do the conversions
+    for f in input_files:
+        # Set up command line options
+        if f == "occurrence":
+            options = get_occurrence_csvtobin_options(csvdir, analysis_settings)
+        else:
+            # All others, no options are needed
+            options = ""
 
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
+        csvfile_to_bin(f, csvdir, bindir, options)
 
-    for input_file in input_files:
-
-        input_file_path = os.path.join(csv_directory, '{}.csv'.format(input_file['name']))
-
-        # Check if the source file exists
-        if os.path.exists(input_file_path):
-            csvfile_to_bin(input_file['name'], csv_directory, bin_directory, "")
-
-    # Now deal with return periods, occurrences and periods
-
+    # In case of reinsurance, we have sub-folders
+    if ri:
+        for ri_csvdir in glob.glob('{}{}RI_[0-9]*'.format(csvdir, os.sep)):
+            ri_bindir = os.path.join(bindir, os.path.basename(ri_csvdir))
+            input_files = get_necessary_conversions(input_files0, ri_csvdir, ri_bindir)
+            for f in input_files:
+                csvfile_to_bin(f, ri_csvdir, ri_bindir, "")
 
 
 @oasis_log

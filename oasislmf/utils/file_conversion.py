@@ -118,7 +118,7 @@ def is_new_bin_needed(filename, csv_directory, bin_directory=None):
             if filename == "footprint":
                 is_needed = ((os.path.getmtime(csvfile) > os.path.getmtime(binfile)) or
                              (os.path.getmtime(csvfile) > os.path.getmtime(idxfile)))
-                # TODO: Case where bin and idx are different times
+                # TODO: Case where bin and idx are different times, but both are newer
             else:
                 is_needed = os.path.getmtime(csvfile) > os.path.getmtime(binfile)
     else:
@@ -177,13 +177,14 @@ def footprint_csv_to_bin(input_file_path, directory, options):
     movefile("footprint.idx", os.path.join(directory, "footprint.idx"))
 
 
-def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
+def csvfile_to_bin(filename, csv_folder, bin_folder=None, options=""):
     """Convert a csv to bin file"""
 
     if bin_folder is None:
-        bin_folder = os.path.dirname(input_file_path)
+        bin_folder = csv_folder
 
     # Do nothing if file isn't there
+    input_file_path = os.path.join(csv_folder, filename + ".csv")
     if not os.path.exists(input_file_path):
         raise Exception("csv file [%s] doesn't exist" % input_file_path)
 
@@ -202,12 +203,12 @@ def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
                                        input_file_path,
                                        output_file_path)
 
-    # print(cmd_str)
+    # Print a message
+    print("\tcsvtobin: {} {}".format(filename, options))
 
     # Run the command
     try:
-        # subprocess.check_call(cmd_str, stderr=subprocess.STDOUT,
-        #                             shell=True)
+        # subprocess.check_call(cmd_str, stderr=subprocess.STDOUT, shell=True)
         proc = subprocess.Popen(cmd_str, shell=True,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT,
@@ -220,6 +221,43 @@ def csvfile_to_bin(filename, input_file_path, bin_folder=None, options=""):
         raise Exception(e)
 
     return
+
+
+def get_occurrence_csvtobin_options(csvdir, settings):
+    """Return the command line options for converting the occurrence file from csv to bin
+
+    Converting occurrence file from csv to bin requires us to know the format and
+    the number of total periods.
+    """
+
+    format_flag = ""
+
+    # Check if the csv file exists
+    occurrence_csv_file = os.path.join(csvdir, 'occurrence.csv')
+    if not os.path.exists(occurrence_csv_file):
+        warnings.warn("occurrence file doesn't exist. Can't determine format")
+        occurrence = None
+    else:
+        # Read the file
+        occurrence = pd.read_csv(occurrence_csv_file)
+        if "occ_date_id" in occurrence.columns:
+            format_flag = '-D'
+
+    if 'model_settings' in settings and 'number_of_periods' in settings['model_settings']:
+        number_of_periods = settings['model_settings']['number_of_periods']
+    elif occurrence is not None:
+        warnings.warn("Number of periods not specified in settings - using max period_no")
+        number_of_periods = 1 + occurrence.period_no.max() - occurrence.period_no.min()
+    else:
+        number_of_periods = None
+
+    if number_of_periods is not None:
+        options = "-P{:d}".format(number_of_periods)
+
+    if format_flag:
+        options += " " + format_flag
+
+    return options
 
 
 def get_required_static_files(analysis_settings):
@@ -306,7 +344,7 @@ def update_static_bin_files(static_folder, static_files, is_intensity_uncertaint
         csv_filename = os.path.join(static_folder, f + ".csv")
 
         print("\tConverting csv -> bin for {}".format(csv_filename))
-        csvfile_to_bin(f, csv_filename, static_folder, options=options)
+        csvfile_to_bin(f, static_folder, static_folder, options=options)
 
     return
 
