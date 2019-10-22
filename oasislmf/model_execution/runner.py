@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 import shutil
+import warnings
 
 import subprocess
 
@@ -85,7 +86,8 @@ def run(
 
     # Don't attempt to run the bash script on windows
     if os.name == "nt":
-        print("bash script {} has been generated".format(filename))
+        warnings.warn("On windows, the bash script is not run automatically since it "
+                      "will fail. It has been generated at \n\t{}".format(filename))
         return
 
     try:
