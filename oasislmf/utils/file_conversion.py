@@ -14,6 +14,7 @@ from .exceptions import OasisException
 # List of all the oasis files and relevant conversion files
 CONVERSION_TOOLS = {
     'items': 'itemtobin',
+    'complex_items': 'complexitemtobin',
     'coverages': 'coveragetobin',
     'gulsummaryxref': 'gulsummaryxreftobin',
     'events': 'evetobin',
@@ -31,8 +32,7 @@ CONVERSION_TOOLS = {
 
 
 def check_conversion_tools(filenamelist=None):
-    """
-    Check that the conversion tools are available
+    """Check that the conversion tools are available.
     """
 
     if filenamelist is None:
@@ -51,8 +51,9 @@ def check_conversion_tools(filenamelist=None):
 
 
 def clean_bins(directory, filelist=None, check_csv=True, csv_folder=None):
-    """
-    Clean the specfied binary files from the associated folder.
+    """Clean the specfied binary files from the associated folder.
+
+    If no files are specified, all files are removed
     """
 
     if not filelist:
@@ -303,10 +304,10 @@ def update_static_bin_files(static_folder, static_files, is_intensity_uncertaint
         static_files = get_necessary_conversions(static_files, static_folder)
 
     if not static_files:
-        print("static conversion: nothing to be done")
+        print("\tstatic conversion: nothing to be done")
         return
     else:
-        print("Files to be updated: {}".format(static_files))
+        print("\tFiles to be updated: {}".format(static_files))
 
     # Check for conversion tools
     check_conversion_tools(static_files)

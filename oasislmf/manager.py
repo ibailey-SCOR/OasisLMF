@@ -594,9 +594,19 @@ class OasisManager(object):
 
     ):
 
-        # Check if insured loss/reinsured loss will be done
-        il = all(p in os.listdir(oasis_fp) for p in ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv', 'fm_xref.csv'])
-        ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
+        # Make sure we have absolute paths
+        model_run_fp, oasis_fp, analysis_settings_fp, model_data_fp = (
+            os.path.abspath(filepath) for filepath in (
+            model_run_fp, oasis_fp, analysis_settings_fp, model_data_fp)
+        )
+
+        # Insured loss calculations are done if the necessary input files are present
+        required_il_files = ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
+                     'fm_xref.csv']
+        is_il = all(p in os.listdir(oasis_fp) for p in required_il_files)
+
+        # Reinsured loss calculations are done if folders are there
+        is_ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
 
         # Check if it is a gul_item stream...i.e. ground up only calculation
         gul_item_stream = False if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) else True
@@ -610,13 +620,13 @@ class OasisManager(object):
             model_run_fp,
             analysis_settings_fp,
             user_data_dir=user_data_dir,
-            ri=ri
+            ri=is_ri
         )
 
         # Read the analysis settings file
         if not analysis_settings_fp:
             analysis_settings_fp = os.path.join(model_run_fp, "analysis_settings.json")
-        analysis_settings = read_analysis_settings(analysis_settings_fp, il, ri)
+        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il, is_ri)
 
         # Copy static files into the "static" sub-folder of the ktools run folder
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
@@ -628,27 +638,29 @@ class OasisManager(object):
         generate_summaryxref_files(model_run_fp,
                                    analysis_settings,
                                    gul_item_stream=gul_item_stream,
-                                   il=il,
-                                   ri=ri,
+                                   il=is_il,
+                                   ri=is_ri,
                                    exposure_fp=exposure_fp,
                                    accounts_fp=accounts_fp)
 
         # "Run inputs" are the input files specific to the analysis and settings,
-        # i.e. events, occurrences, return_periods, periods
-
-        # Check any  file indicators  are removed (e.g. events_p.bin -> events.bin)
-        input_files = prepare_run_inputs(analysis_settings, model_run_fp, ri, model_data_fp)
+        # i.e. events, occurrences, return_periods, periods. Copy these files into run
+        # folder and remove any file indicators (e.g. events_p.bin ->
+        # events.bin)
+        input_files = prepare_run_inputs(analysis_settings, model_run_fp, model_data_fp)
 
         # Generate the binary files for the input folder
-        if not ri:
+        if not is_ri:
             # Without reinsurance, fairly straightforward
             fp = os.path.join(model_run_fp, 'input')
-            csv_to_bin(fp, fp, input_files, il,
+            csv_to_bin(fp, fp, input_files, is_il,
                        ri=False,
                        analysis_settings=analysis_settings)
         else:
             # With reinsurance, account for the sub-folders
             contents = os.listdir(model_run_fp)
+
+            # TODO: This is really hard to read code and should be simplified
             for fp in [
                 os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)
                 ]:
@@ -672,7 +684,7 @@ class OasisManager(object):
 
             # Get the number of reinsurance layers
             ri_layers = 0
-            if ri:
+            if is_ri:
                 try:
                     with io.open(os.path.join(model_run_fp, 'ri_layers.json'), 'r', encoding='utf-8') as f:
                         ri_layers = len(json.load(f))

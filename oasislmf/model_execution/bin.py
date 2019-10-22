@@ -145,6 +145,8 @@ def link_or_copy_file(filename, source_folder, destination_folder):
 
     desintation_folder: (str) folder to which we link or copy
 
+    returns nothing, but will cause an error if neither link or copy is possible
+
     """
 
     # Check if the file exists
@@ -178,6 +180,10 @@ def link_or_copy_file(filename, source_folder, destination_folder):
 
 def copy_static_files(run_dir, model_data_fp, analysis_settings):
     """Link or copy files into the static folder
+
+    run_dir: (str) the ktools run folder path
+    model_data_fp: (str) the file path for original static data files
+    analysis_settings: (dict) the oasislmf format analysis settings
     """
 
     # Force use of the full path for the source
@@ -211,7 +217,14 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
 
 
 def copy_input_files(run_dir, oasis_src_fp):
-    """Copy all input files in the source folder into the input folder"""
+    """Copy all input files into the 'input' subfolder of the ktools run folder.
+
+
+    run_dir: (str) the file path of the ktools run folder, files will be put into the
+    'input' sub-folder
+
+    oasis_src_fp: (str) the file path of the source folder containing the input files
+    """
 
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
@@ -236,8 +249,9 @@ def copy_input_files(run_dir, oasis_src_fp):
 
 
 def list_required_run_inputs(analysis_settings):
-    """Based on analysis settings, return a list of model input data files (not exposure related) that will be
-    required.
+    """Get list of required run inputs (not exposure related) based on analysis settings.
+
+    analysis_settings: (dict) oasislmf format analysis settings
 
     Returns a list of filenames as expected by ktools, without any file suffixes.
     """
@@ -279,8 +293,28 @@ def list_required_run_inputs(analysis_settings):
 
 
 def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
-    """ Copy a run input file into the model run "input" folder and rename it if
-    necessary. We allow bin or csv files.
+    """ Copy and rename run input file into the model run "input" folder.
+
+    Run inputs include 'events', 'occurrence', 'periods', 'returnperiods'
+
+    Run inputs can have non-standard names (e.g. events_model1.csv events_model2.csv),
+    and we indicate which file we want via the settings file. This function gets the
+    approapriate filename based on the settings, then copys the file into the 'input'
+    sub-folder of the analysis folder.
+
+    The existing run inputs can be in either an existing source input folder, or in the
+    model data falder. They can be either csv or bin files.
+
+    filename (str): which input file (using standard naming)
+
+    setting_val (str): filename modifier based on the settings. Empty string or None to
+    use standard name.
+
+    input_fp (str): the source input folder to look in
+
+    modeldata_fp (str): the path of the model data folder to look in
+
+    An error will be raised if neither bin or csv can be found
 
     """
 
@@ -311,23 +345,29 @@ def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
         srcfilename, input_fp, modeldata_fp))
 
 @oasis_log
-def prepare_run_inputs(analysis_settings, run_dir, ri=False, model_data_fp=None):
-    """
-    Sets up binary files in the model inputs directory.
+def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
+    """Sets up binary files in the model inputs directory.
 
     :param analysis_settings: model analysis settings dict
     :type analysis_settings: dict
 
     :param run_dir: model run directory
     :type run_dir: str
+
+    :param model_data_fp: folder containing the model data, default is none
+    :type model_data_fp: str
+
+    :returns: a list of files that are required according to the analysis settings
     """
 
     # Get a list of the run-input files that are needed
     file_list = list_required_run_inputs(analysis_settings)
 
-    # Get model settings, which has any filename identifier for specific set of events/occurrences
+    # Get model settings, which has any filename identifier for specific set of
+    # events/occurrences.
     model_settings = analysis_settings.get('model_settings', {})
     setting_val = None
+
     # Get the destination path
     destn_path = os.path.join(run_dir, 'input')
 
@@ -404,8 +444,7 @@ def _check_each_inputs_directory(directory_to_check, il=False, check_binaries=Tr
 @oasis_log
 def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False,
                analysis_settings=None):
-    """
-    Create the binary files.
+    """Make sure we have all .bin files in the input sub-folder
 
     :param csv_directory: the directory containing the CSV files
     :type csv_directory: str
@@ -413,11 +452,17 @@ def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False
     :param bin_directory: the directory to write the binary files
     :type bin_directory: str
 
+    :param run_input_files: list of run inputs that also need to be in the inputs folder
+
     :param il: whether to create the binaries required for insured loss calculations
     :type il: bool
 
     :param ri: whether to create the binaries required for reinsurance calculations
     :type ri: bool
+
+    :param analysis_settings: oasislmf analysis settings dict. Needed for occurrence
+    file conversion
+    :type analysis_settings: dict
 
     :raises OasisException: If one of the conversions fails
     """
