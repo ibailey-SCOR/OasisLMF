@@ -204,6 +204,7 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
 
     # Add the non-keys dict files if they exist
     optional_files = ['event_dict.csv', 'intensity_bin_dict.csv']
+    optional_files += [f + ".csv" for f in static_files]
     for fnm in optional_files:
         if os.path.exists(os.path.join(model_data_fp, fnm)):
             static_files.append(fnm)
