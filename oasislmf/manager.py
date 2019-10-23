@@ -77,7 +77,8 @@ from .utils.path import (
     setcwd,
 )
 from .utils.coverages import SUPPORTED_COVERAGE_TYPES
-
+from .utils.file_conversion import (get_required_static_files,
+                                    get_necessary_conversions)
 pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -627,6 +628,14 @@ class OasisManager(object):
         if not analysis_settings_fp:
             analysis_settings_fp = os.path.join(model_run_fp, "analysis_settings.json")
         analysis_settings = read_analysis_settings(analysis_settings_fp, is_il, is_ri)
+
+        # Check if the static model files are up to date
+        out_of_date_static_files = get_necessary_conversions(
+            get_required_static_files(analysis_settings),
+            model_data_fp)
+        if any(out_of_date_static_files):
+            warnings.warn(("Static .bin files are out of date versions of .csv files:" +
+                           " {}").format(out_of_date_static_files))
 
         # Copy static files into the "static" sub-folder of the ktools run folder
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
