@@ -190,21 +190,21 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     model_data_fp = os.path.abspath(model_data_fp)
 
     # Start with list of files that are always required
-    static_files = ['footprint', 'vulnerability', 'damage_bin_dict']
+    static_files0 = ['footprint', 'vulnerability', 'damage_bin_dict']
 
     # Check if random is required
     if 'model_settings' in analysis_settings:
         if (('use_random_number_file'in analysis_settings['model_settings']) and
             (analysis_settings['model_settings']['use_random_number_file'])):
-         static_files.append('random')
+         static_files0.append('random')
 
     # Add the bin suffix
-    static_files = [f + ".bin" for f in static_files]
+    static_files = [f + ".bin" for f in static_files0]
     static_files.append("footprint.idx")
 
     # Add the non-keys dict files if they exist
     optional_files = ['event_dict.csv', 'intensity_bin_dict.csv']
-    optional_files += [f + ".csv" for f in static_files]
+    optional_files += [f + ".csv" for f in static_files0]
     for fnm in optional_files:
         if os.path.exists(os.path.join(model_data_fp, fnm)):
             static_files.append(fnm)
