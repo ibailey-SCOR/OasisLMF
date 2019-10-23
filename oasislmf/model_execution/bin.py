@@ -472,11 +472,6 @@ def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False
 
     il = il or ri
 
-    # TODO: get a list of required files
-
-    # TODO: add the run_input files needed
-    #_csv_to_bin(csvdir, bindir, il)
-
     if il:
         # If insured loss, then consider all files
         input_files0 = [f['name'] for f in INPUT_FILES.values()]
