@@ -274,7 +274,7 @@ def list_required_run_inputs(analysis_settings):
             # Occurrence is needed for AAL or loss-exceedance curve outputs
             if 'aalcalc' in summary and summary['aalcalc'] is True:
                 is_occ = True
-            if 'leccalc' in summary and summary['leccalc'] is True:
+            if 'leccalc' in summary:
                 is_occ = True
 
                 # Return period is needed if flagged in analysis settings
