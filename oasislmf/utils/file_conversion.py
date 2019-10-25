@@ -136,37 +136,8 @@ def is_new_bin_needed(filename, csv_directory, bin_directory=None):
     return is_needed
 
 
-def footprint_csv_to_bin(input_file_path, directory, options):
-    """Convert the footprint file to binary. This is a special case because two files
-    are generated... footprint.bin and footprint.idx
-
-    Options for footprinttobin
-    -i max intensity bins
-    -n No intensity uncertainty
-    -s skip header
-    """
-
-    cmd_str = "{} {} < {}".format(CONVERSION_TOOLS['footprint'],
-                                  options,
-                                  input_file_path)
-
-    # print(cmd_str)
-
-    # Run the command
-    try:
-        # subprocess.check_call(cmd_str, stderr=subprocess.STDOUT, shell=True)
-        proc = subprocess.Popen(cmd_str,
-                                shell=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                universal_newlines=True)
-
-        stdout_text = proc.stdout.read().strip()
-        if stdout_text:
-            print("STDOUT:\n{}".format(stdout_text))
-
-    except subprocess.CalledProcessError as e:
-        raise Exception(e)
+def move_footprint_files(directory):
+    """Move the footprint files from the current folder to another one"""
 
     def movefile(src, dst):
         """Move the files, including overwrite"""
@@ -179,7 +150,29 @@ def footprint_csv_to_bin(input_file_path, directory, options):
 
 
 def csvfile_to_bin(filename, csv_folder, bin_folder=None, options=""):
-    """Convert a csv to bin file"""
+    """Convert a csv to bin file. Calls the ktools conversion
+
+    filename: (str) is the name of the file to convert without folder or suffix. This
+    must be the correct name for ktools so that the appropriate conversion tool can be
+    found.
+
+    csv_folder: (str) is the path to the folder where the csv file is found. The input
+    file must be named filename.csv
+
+    bin_folder: (str) is the path to the folder where the bin file is stored. Default
+    is the same as the csv folder
+
+    options: (str) is a string containing any options passed to the conversion file
+
+        e.g. Options for footprinttobin
+        -i max intensity bins
+        -n No intensity uncertainty
+        -s skip header
+
+    Example:
+        csvfile_to_bin("footprint", "./path/to/csv", "./path/to/csv", "-i 102 -n")
+
+    """
 
     if bin_folder is None:
         bin_folder = csv_folder
@@ -189,37 +182,38 @@ def csvfile_to_bin(filename, csv_folder, bin_folder=None, options=""):
     if not os.path.exists(input_file_path):
         raise Exception("csv file [%s] doesn't exist" % input_file_path)
 
-    # Special case for footprint
-    if filename == "footprint":
-        if not options:
-            raise Exception("Options are required for footprint conversion")
-        footprint_csv_to_bin(input_file_path, bin_folder, options)
-        return
+    # If footprint, make sure the options were specified
+    if filename == "footprint" and not options:
+        raise Exception("Options are required for footprint conversion")
 
-    output_file_path = os.path.join(bin_folder, filename + ".bin")
+    # Get the command we will send to the external shell. Don't specify output file yet
+    cmd_str = "{} {} < \"{}\"".format(CONVERSION_TOOLS[filename], options,
+                                      input_file_path)
 
-    # Get the conversion command string
-    cmd_str = "{} {} < {} > {}".format(CONVERSION_TOOLS[filename],
-                                       options,
-                                       input_file_path,
-                                       output_file_path)
+    if filename != "footprint":
+        # For everything except footprint we need to direct to an output file
+        output_file_path = os.path.join(bin_folder, filename + ".bin")
+        cmd_str += " > \"{}\"".format(output_file_path)
 
-    # Print a message
+    # Print a message to indicate the conversion started
     print("\tcsvtobin: {} {}".format(filename, options))
 
     # Run the command
-    try:
-        # subprocess.check_call(cmd_str, stderr=subprocess.STDOUT, shell=True)
-        proc = subprocess.Popen(cmd_str, shell=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                universal_newlines=True)
-        stdout_text = proc.stdout.read().strip()
-        if stdout_text:
-            print("STDOUT:\n{}".format(stdout_text))
-        # proc.communicate()
-    except subprocess.CalledProcessError as e:
-        raise Exception(e)
+    with subprocess.Popen(cmd_str, shell=True, universal_newlines=True) as process:
+        try:
+            process.communicate()
+        except:
+            process.kill()
+            process.wait()
+            raise
+
+        # Check if the process has terminated and get the return code, 0 is good
+        retcode = process.poll()
+        if retcode:
+            raise subprocess.CalledProcessError(retcode, process.args)
+
+    if filename == "footprint":
+        move_footprint_files(bin_folder)
 
     return
 
