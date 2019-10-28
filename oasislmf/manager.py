@@ -83,7 +83,8 @@ pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-def read_analysis_settings(analysis_settings_fp, check_il=False, check_ri=False):
+def read_analysis_settings(analysis_settings_fp, il_files_exist=False,
+                           ri_files_exist=False):
     """Read the analysis settings file"""
 
 
@@ -101,16 +102,26 @@ def read_analysis_settings(analysis_settings_fp, check_il=False, check_ri=False)
         raise OasisException('Invalid analysis settings file or file path: {}.'.format(
             analysis_settings_fp))
 
-    # Make sure some aspects of the analysis settings are explicitly there
-    if not check_il:
+    # Reset il_output if the files are not there
+    if not il_files_exist or 'il_output' not in analysis_settings:
         # No insured loss output
         analysis_settings['il_output'] = False
         analysis_settings['il_summaries'] = []
 
-    if not check_ri:
+    # Same for ri_output
+    if not ri_files_exist or 'ri_output' not in analysis_settings:
         # No reinsured loss output
         analysis_settings['ri_output'] = False
         analysis_settings['ri_summaries'] = []
+
+    # If we want ri_output, we will need il_output, which needs il_files
+    if analysis_settings['ri_output'] and not analysis_settings['il_output']:
+        if not il_files_exist:
+            warnings.warn("ri_output selected, but il files not found")
+            analysis_settings['ri_output'] = False
+            analysis_settings['ri_summaries'] = []
+        else:
+            analysis_settings['il_output'] = True
 
     # guard - Check if at least one output type is selected
     if not any([
@@ -120,6 +131,9 @@ def read_analysis_settings(analysis_settings_fp, check_il=False, check_ri=False)
     ]):
         raise OasisException(
             'No valid output settings in: {}'.format(analysis_settings_fp))
+
+
+
 
     return analysis_settings
 
@@ -601,33 +615,15 @@ class OasisManager(object):
             model_run_fp, oasis_fp, analysis_settings_fp, model_data_fp)
         )
 
-        # Insured loss calculations are done if the necessary input files are present
+        # Insured loss calculations can only be done with the necessary input files
         required_il_files = ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
-                     'fm_xref.csv']
-        is_il = all(p in os.listdir(oasis_fp) for p in required_il_files)
-
-        # Reinsured loss calculations are done if folders are there
-        is_ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
-
-        # Check if it is a gul_item stream...i.e. ground up only calculation
-        gul_item_stream = False if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) else True
-
-        # Create the ktools run folder if it doesn't exist
-        if not os.path.exists(model_run_fp):
-            Path(model_run_fp).mkdir(parents=True, exist_ok=True)
-
-        # Create the folder structure within the ktools run folder
-        prepare_run_directory(
-            model_run_fp,
-            analysis_settings_fp,
-            user_data_dir=user_data_dir,
-            ri=is_ri
-        )
+                             'fm_xref.csv']
+        is_il_files = all(p in os.listdir(oasis_fp) for p in required_il_files)
+        is_ri_files = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
 
         # Read the analysis settings file
-        if not analysis_settings_fp:
-            analysis_settings_fp = os.path.join(model_run_fp, "analysis_settings.json")
-        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il, is_ri)
+        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il_files,
+                                                   is_ri_files)
 
         # Check if the static model files are up to date
         out_of_date_static_files = get_necessary_conversions(
@@ -637,11 +633,31 @@ class OasisManager(object):
             warnings.warn(("Static .bin files are out of date versions of .csv files:" +
                            " {}").format(out_of_date_static_files))
 
+        # Check what kind of output we want
+        is_il = analysis_settings['il_output']
+        is_ri = analysis_settings['ri_output']
+
+        if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) or (
+            not is_il):
+            gul_item_stream = False
+        else:
+            gul_item_stream = True
+
+        # Create the folder structure within the ktools run folder
+        if not os.path.exists(model_run_fp):
+            Path(model_run_fp).mkdir(parents=True, exist_ok=True)
+
+        prepare_run_directory(
+            model_run_fp,
+            analysis_settings_fp,
+            user_data_dir=user_data_dir,
+            ri=is_ri)
+
         # Copy static files into the "static" sub-folder of the ktools run folder
         copy_static_files(model_run_fp, model_data_fp, analysis_settings)
 
         # Move input files into the "input" sub-folder of the ktools run folder
-        copy_input_files(model_run_fp, oasis_fp)
+        copy_input_files(model_run_fp, oasis_fp, analysis_settings)
 
         # Generate the summaryxref files which control the level of detail in result reporting
         generate_summaryxref_files(model_run_fp,
@@ -662,8 +678,7 @@ class OasisManager(object):
         if not is_ri:
             # Without reinsurance, fairly straightforward
             fp = os.path.join(model_run_fp, 'input')
-            csv_to_bin(fp, fp, input_files, is_il,
-                       ri=False,
+            csv_to_bin(fp, fp, input_files, is_il, ri=False,
                        analysis_settings=analysis_settings)
         else:
             # With reinsurance, account for the sub-folders
@@ -691,14 +706,16 @@ class OasisManager(object):
         # Change to the model run folder
         with setcwd(model_run_fp):
 
-            # Get the number of reinsurance layers
+            # Get the reinsurance layers
             ri_layers = 0
             if is_ri:
                 try:
-                    with io.open(os.path.join(model_run_fp, 'ri_layers.json'), 'r', encoding='utf-8') as f:
+                    with io.open(os.path.join(model_run_fp, 'ri_layers.json'), 'r',
+                                 encoding='utf-8') as f:
                         ri_layers = len(json.load(f))
                 except IOError:
-                    with io.open(os.path.join(model_run_fp, 'input', 'ri_layers.json'), 'r', encoding='utf-8') as f:
+                    with io.open(os.path.join(model_run_fp, 'input', 'ri_layers.json'),
+                                 'r', encoding='utf-8') as f:
                         ri_layers = len(json.load(f))
 
             # Run the model
@@ -708,7 +725,7 @@ class OasisManager(object):
                 filename=script_fp,
                 num_reinsurance_iterations=ri_layers,
                 ktools_mem_limit=(ktools_mem_limit or self.ktools_mem_limit),
-                set_alloc_rule_gul=(ktools_alloc_rule_gul if isinstance(ktools_alloc_rule_gul, int) else self.ktools_alloc_rule_gul),
+                set_alloc_rule_gul=gul_item_stream,
                 set_alloc_rule_il=(ktools_alloc_rule_il if isinstance(ktools_alloc_rule_il, int) else self.ktools_alloc_rule_il),
                 run_debug=(ktools_debug or self.ktools_debug),
                 fifo_tmp_dir=(not (ktools_fifo_relative or self.ktools_fifo_relative))

@@ -217,7 +217,7 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
         link_or_copy_file(fnm, model_data_fp, model_data_dst_fp)
 
 
-def copy_input_files(run_dir, oasis_src_fp):
+def copy_input_files(run_dir, oasis_src_fp, analysis_settings):
     """Copy all input files into the 'input' subfolder of the ktools run folder.
 
 
@@ -227,23 +227,37 @@ def copy_input_files(run_dir, oasis_src_fp):
     oasis_src_fp: (str) the file path of the source folder containing the input files
     """
 
+    input_files = ['items.csv', 'coverages.csv', 'gul_summary_map.csv']
+
+    if analysis_settings['il_output']:
+        input_files += ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
+                         'fm_xref.csv', 'fm_summary_map.csv']
+
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
-        for p in os.listdir(oasis_src_fp):
+        for p in input_files:
             src = os.path.join(oasis_src_fp, p)
-
-            # Don't copy an tar or tar.gz files
-            if src.endswith('.tar') or src.endswith('.tar.gz'):
-                continue
-
             dst = os.path.join(oasis_dst_fp, p)
 
-            # Check if it is a reinsurance folder
-            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
-                # Make a copy if it is not a reinsurance folder
-                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
-            else:
-                shutil.move(src, run_dir)
+            # Make a copy unless the file is already there
+            shutil.copy2(src, oasis_dst_fp) if not (
+                        os.path.exists(dst) and filecmp.cmp(src, dst)) else None
+
+        # optional files
+        for p in ['complex_items.csv', 'events.csv', 'occurrence.csv',
+                  'returnperiods.csv', 'periods.csv']:
+            src = os.path.join(oasis_src_fp, p)
+            if os.path.exists(src):
+                dst = os.path.join(oasis_dst_fp, p)
+                if not (os.path.exists(dst) and filecmp.cmp(src, dst)):
+                    shutil.copy2(src, oasis_dst_fp)
+
+        # Re insurance files & folders
+        if analysis_settings['ri_output']:
+            for p in os.listdir(os.path.join(oasis_src_fp)):
+                src = os.path.join(oasis_src_fp, p)
+                if (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
+                    shutil.move(src, run_dir)
 
     except OSError as e:
         raise OasisException from e
@@ -477,7 +491,8 @@ def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False
         input_files0 = [f['name'] for f in INPUT_FILES.values()]
     else:
         # If GUL loss, don't consider those flagged as 'il'
-        input_files0 = [f for f in INPUT_FILES.values() if f['type'] != 'il']
+        input_files0 = [f['name'] for f in INPUT_FILES.values() if f['type'] != 'il']
+        print(input_files0)
 
     # Append the run input files
     input_files = input_files0 + run_input_files
