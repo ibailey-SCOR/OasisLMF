@@ -492,7 +492,6 @@ def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False
     else:
         # If GUL loss, don't consider those flagged as 'il'
         input_files0 = [f['name'] for f in INPUT_FILES.values() if f['type'] != 'il']
-        print(input_files0)
 
     # Append the run input files
     input_files = input_files0 + run_input_files
