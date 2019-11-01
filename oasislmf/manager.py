@@ -637,11 +637,17 @@ class OasisManager(object):
         is_il = analysis_settings['il_output']
         is_ri = analysis_settings['ri_output']
 
-        if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) or (
-            not is_il):
-            gul_item_stream = False
+        if not ktools_alloc_rule_gul:
+            ktools_alloc_rule_gul = self.ktools_alloc_rule_gul
+
+        if (ktools_alloc_rule_gul == 0) or (not is_il):
+            gul_item_stream = 0
         else:
-            gul_item_stream = True
+            gul_item_stream = 1
+        # print(ktools_alloc_rule_gul)
+        # print(is_il)
+        # print(gul_item_stream)
+        # sys.exit()
 
         # Create the folder structure within the ktools run folder
         if not os.path.exists(model_run_fp):
