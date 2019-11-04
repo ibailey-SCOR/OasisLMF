@@ -116,8 +116,9 @@ def prepare_run_directory(
 
         # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
-        shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and
-                                                       filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
+        if not (os.path.exists(dst) and
+                filecmp.cmp(analysis_settings_fp, dst, shallow=False)):
+            shutil.copy(analysis_settings_fp, dst)
 
         # Copy user data
         oasis_dst_fp = os.path.join(run_dir, 'input')
@@ -195,8 +196,8 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     # Check if random is required
     if 'model_settings' in analysis_settings:
         if (('use_random_number_file'in analysis_settings['model_settings']) and
-            (analysis_settings['model_settings']['use_random_number_file'])):
-         static_files0.append('random')
+                (analysis_settings['model_settings']['use_random_number_file'])):
+            static_files0.append('random')
 
     # Add the bin suffix
     static_files = [f + ".bin" for f in static_files0]
@@ -236,7 +237,7 @@ def copy_input_files(run_dir, oasis_src_fp, analysis_settings):
 
     if analysis_settings['il_output']:
         input_files += ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
-                         'fm_xref.csv', 'fm_summary_map.csv']
+                        'fm_xref.csv', 'fm_summary_map.csv']
 
     oasis_dst_fp = os.path.join(run_dir, 'input')
     try:
@@ -261,7 +262,7 @@ def copy_input_files(run_dir, oasis_src_fp, analysis_settings):
         if analysis_settings['ri_output']:
             for p in os.listdir(os.path.join(oasis_src_fp)):
                 src = os.path.join(oasis_src_fp, p)
-                if (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
+                if re.match(r'RI_\d+$', p) or p == 'ri_layers.json':
                     shutil.move(src, run_dir)
 
     except OSError as e:
@@ -298,7 +299,7 @@ def list_required_run_inputs(analysis_settings):
 
                 # Return period is needed if flagged in analysis settings
                 if ('return_period_file' in summary['leccalc'] and
-                    summary['leccalc']['return_period_file'] is True):
+                        summary['leccalc']['return_period_file'] is True):
                     is_rp = True
 
     if is_occ:
@@ -364,6 +365,7 @@ def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
     raise OasisException("File {} was not found as csv or bin in {} or {}".format(
         srcfilename, input_fp, modeldata_fp))
 
+
 @oasis_log
 def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
     """Sets up binary files in the model inputs directory.
@@ -415,6 +417,7 @@ def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
 
     return file_list
 
+
 @oasis_log
 def check_inputs_directory(directory_to_check, il=False, ri=False, check_binaries=True):
     """
@@ -426,8 +429,8 @@ def check_inputs_directory(directory_to_check, il=False, ri=False, check_binarie
     :param il: check insuured loss files
     :type il: bool
 
-    :param il: check resinsurance sub-folders
-    :type il: bool
+    :param ri: check resinsurance sub-folders
+    :type ri: bool
 
     :param check_binaries: check binary files are not present
     :type check_binaries: bool
