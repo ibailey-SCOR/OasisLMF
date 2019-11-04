@@ -203,7 +203,7 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     static_files.append("footprint.idx")
 
     # Add the non-keys dict files if they exist
-    optional_files = ['event_dict.csv', 'intensity_bin_dict.csv', 'ModelVersion.csv']
+    optional_files = ['event_dict.csv', 'intensity_bin_dict.csv']
     optional_files += [f + ".csv" for f in static_files0]
     for fnm in optional_files:
         if os.path.exists(os.path.join(model_data_fp, fnm)):
@@ -212,9 +212,14 @@ def copy_static_files(run_dir, model_data_fp, analysis_settings):
     # Get the destination folder path.
     model_data_dst_fp = os.path.join(run_dir, 'static')
 
-    # Loop through each file and copy it
+    # Loop through each file and create a link to it
     for fnm in static_files:
         link_or_copy_file(fnm, model_data_fp, model_data_dst_fp)
+
+    # Copy the model version info into the main analysis folder
+    model_version_file = os.path.join(model_data_fp, 'ModelVersion.csv')
+    if os.path.exists(model_version_file):
+        shutil.copy2(model_version_file, run_dir)
 
 
 def copy_input_files(run_dir, oasis_src_fp, analysis_settings):
