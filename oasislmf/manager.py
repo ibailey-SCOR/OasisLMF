@@ -21,6 +21,7 @@ import pandas as pd
 from pathlib2 import Path
 
 from .model_execution import runner
+from .model_execution.conf import read_analysis_settings
 from .model_execution.bin import (
     csv_to_bin,
     prepare_run_directory,
@@ -81,61 +82,6 @@ from .utils.file_conversion import (get_required_static_files,
                                     get_necessary_conversions)
 pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-
-def read_analysis_settings(analysis_settings_fp, il_files_exist=False,
-                           ri_files_exist=False):
-    """Read the analysis settings file"""
-
-
-    # Load analysis_settings file
-    try:
-        # Load as a json
-        with io.open(analysis_settings_fp, 'r', encoding='utf-8') as f:
-            analysis_settings = json.load(f)
-
-        # Extract the analysis_settings part within the json
-        if analysis_settings.get('analysis_settings'):
-            analysis_settings = analysis_settings['analysis_settings']
-
-    except (IOError, TypeError, ValueError):
-        raise OasisException('Invalid analysis settings file or file path: {}.'.format(
-            analysis_settings_fp))
-
-    # Reset il_output if the files are not there
-    if not il_files_exist or 'il_output' not in analysis_settings:
-        # No insured loss output
-        analysis_settings['il_output'] = False
-        analysis_settings['il_summaries'] = []
-
-    # Same for ri_output
-    if not ri_files_exist or 'ri_output' not in analysis_settings:
-        # No reinsured loss output
-        analysis_settings['ri_output'] = False
-        analysis_settings['ri_summaries'] = []
-
-    # If we want ri_output, we will need il_output, which needs il_files
-    if analysis_settings['ri_output'] and not analysis_settings['il_output']:
-        if not il_files_exist:
-            warnings.warn("ri_output selected, but il files not found")
-            analysis_settings['ri_output'] = False
-            analysis_settings['ri_summaries'] = []
-        else:
-            analysis_settings['il_output'] = True
-
-    # guard - Check if at least one output type is selected
-    if not any([
-        analysis_settings['gul_output'] if 'gul_output' in analysis_settings else False,
-        analysis_settings['il_output'] if 'il_output' in analysis_settings else False,
-        analysis_settings['ri_output'] if 'ri_output' in analysis_settings else False,
-    ]):
-        raise OasisException(
-            'No valid output settings in: {}'.format(analysis_settings_fp))
-
-
-
-
-    return analysis_settings
 
 
 class OasisManager(object):
@@ -622,8 +568,7 @@ class OasisManager(object):
         is_ri_files = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
 
         # Read the analysis settings file
-        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il_files,
-                                                   is_ri_files)
+        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il_files, is_ri_files)
 
         # Check if the static model files are up to date
         out_of_date_static_files = get_necessary_conversions(
@@ -637,6 +582,7 @@ class OasisManager(object):
         is_il = analysis_settings['il_output']
         is_ri = analysis_settings['ri_output']
 
+        # Check whether it is a gul only analysis, meaning not item stream
         if not ktools_alloc_rule_gul:
             ktools_alloc_rule_gul = self.ktools_alloc_rule_gul
 
@@ -644,10 +590,6 @@ class OasisManager(object):
             gul_item_stream = 0
         else:
             gul_item_stream = 1
-        # print(ktools_alloc_rule_gul)
-        # print(is_il)
-        # print(gul_item_stream)
-        # sys.exit()
 
         # Create the folder structure within the ktools run folder
         if not os.path.exists(model_run_fp):

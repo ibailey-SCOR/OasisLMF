@@ -84,3 +84,55 @@ def create_analysis_settings_json(directory):
     logging.getLogger().info("Analysis settings json: {}".format(output_json))
 
     return output_json
+
+
+def read_analysis_settings(analysis_settings_fp, il_files_exist=False,
+                           ri_files_exist=False):
+    """Read the analysis settings file"""
+
+
+    # Load analysis_settings file
+    try:
+        # Load as a json
+        with io.open(analysis_settings_fp, 'r', encoding='utf-8') as f:
+            analysis_settings = json.load(f)
+
+        # Extract the analysis_settings part within the json
+        if analysis_settings.get('analysis_settings'):
+            analysis_settings = analysis_settings['analysis_settings']
+
+    except (IOError, TypeError, ValueError):
+        raise OasisException('Invalid analysis settings file or file path: {}.'.format(
+            analysis_settings_fp))
+
+    # Reset il_output if the files are not there
+    if not il_files_exist or 'il_output' not in analysis_settings:
+        # No insured loss output
+        analysis_settings['il_output'] = False
+        analysis_settings['il_summaries'] = []
+
+    # Same for ri_output
+    if not ri_files_exist or 'ri_output' not in analysis_settings:
+        # No reinsured loss output
+        analysis_settings['ri_output'] = False
+        analysis_settings['ri_summaries'] = []
+
+    # If we want ri_output, we will need il_output, which needs il_files
+    if analysis_settings['ri_output'] and not analysis_settings['il_output']:
+        if not il_files_exist:
+            warnings.warn("ri_output selected, but il files not found")
+            analysis_settings['ri_output'] = False
+            analysis_settings['ri_summaries'] = []
+        else:
+            analysis_settings['il_output'] = True
+
+    # guard - Check if at least one output type is selected
+    if not any([
+        analysis_settings['gul_output'] if 'gul_output' in analysis_settings else False,
+        analysis_settings['il_output'] if 'il_output' in analysis_settings else False,
+        analysis_settings['ri_output'] if 'ri_output' in analysis_settings else False,
+    ]):
+        raise OasisException(
+            'No valid output settings in: {}'.format(analysis_settings_fp))
+
+    return analysis_settings
