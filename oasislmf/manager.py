@@ -607,7 +607,7 @@ class OasisManager(object):
         # Move input files into the "input" sub-folder of the ktools run folder
         copy_input_files(model_run_fp, oasis_fp, analysis_settings)
 
-        # Generate the summaryxref files which control the level of detail in result reporting
+        # Generate the summaryxref files which control the detail in result reporting
         generate_summaryxref_files(model_run_fp,
                                    analysis_settings,
                                    gul_item_stream=gul_item_stream,
