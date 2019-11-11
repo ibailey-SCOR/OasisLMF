@@ -146,7 +146,7 @@ def link_or_copy_file(filename, source_folder, destination_folder):
 
     desintation_folder: (str) folder to which we link or copy
 
-    returns nothing, but will cause an error if neither link or copy is possible
+    returns nothing, but will raise an error if neither link or copy is possible
 
     """
 
@@ -156,21 +156,26 @@ def link_or_copy_file(filename, source_folder, destination_folder):
             os.path.join(source_folder, filename)))
 
     # Make a soft link of the file in the new folder
+    sourcefile = os.path.join(source_folder, filename)
+    destfile = os.path.join(destination_folder, filename)
     try:
         # Use symbolic link if we can
-        os.symlink(
-            os.path.join(source_folder, filename),
-            os.path.join(destination_folder, filename))
+        os.symlink(sourcefile, destfile)
         print("\tLinking {} from {}".format(filename, source_folder))
 
     except OSError as why:
-        if why.errno == errno.EEXIST:
-            # Check if the link already exists, then do nothing
-            print("\tNot linking {} because destn file exists".format(filename))
+        if why.errno == errno.EEXIST and os.path.islink(destfile):
+            # If the link already exists, check files are different replace it
+            if os.readlink(destfile) != os.abspath(sourcefile):
+                os.symlink(sourcefile, destfile + ".tmp")
+                os.replace(destfile + ".tmp", destfile)
+                print("\tLinking {} from {}".format(filename, source_folder))
+
         else:
             # Otherwise try to copy the file (probably necessary on windows)
             try:
-                print("\tCopying {} from {}".format(filename, source_folder))
+                print("\tError creating symbolic link. Copying {} from {}".format(
+                    filename, source_folder))
                 shutil.copy2(
                     os.path.join(source_folder, filename),
                     os.path.join(destination_folder, filename))
