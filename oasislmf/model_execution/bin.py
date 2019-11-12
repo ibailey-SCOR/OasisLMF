@@ -37,13 +37,8 @@ from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
 
 
 @oasis_log
-def prepare_run_directory(
-    run_dir,
-    analysis_settings_fp,
-    inputs_archive=None,
-    user_data_dir=None,
-    ri=False,
-):
+def prepare_run_directory(run_dir, analysis_settings_fp, inputs_archive=None,
+                          user_data_dir=None, ri=False):
     """
     Ensures that the model run directory has the correct folder structure in
     order for the model run script (ktools) to be executed. Without the RI
@@ -93,13 +88,18 @@ def prepare_run_directory(
     :param run_dir: the model run directory
     :type run_dir: str
 
-    :param ri: Boolean flag for RI mode
-    :type ri: bool
-
     :param analysis_settings_fp: analysis settings JSON file path
     :type analysis_settings_fp: str
 
-    :param: user_data_dir: path to a directory containing additional user-supplied model data
+    :param inputs_archive: for case when inputs is a tar file
+    :type inputs_archive: str
+
+    :param ri: Boolean flag for RI mode
+    :type ri: bool
+
+
+    :param: user_data_dir: path to a directory containing additional user-supplied
+    model data.
     :type user_data_dir: str
     """
     try:
@@ -166,7 +166,7 @@ def link_or_copy_file(filename, source_folder, destination_folder):
     except OSError as why:
         if why.errno == errno.EEXIST and os.path.islink(destfile):
             # If the link already exists, check files are different replace it
-            if os.readlink(destfile) != os.abspath(sourcefile):
+            if os.readlink(destfile) != os.path.abspath(sourcefile):
                 os.symlink(sourcefile, destfile + ".tmp")
                 os.replace(destfile + ".tmp", destfile)
                 print("\tLinking {} from {}".format(filename, source_folder))
@@ -174,7 +174,7 @@ def link_or_copy_file(filename, source_folder, destination_folder):
         else:
             # Otherwise try to copy the file (probably necessary on windows)
             try:
-                print("\tError creating symbolic link. Copying {} from {}".format(
+                print("\tCouldn't create symbolic link. Copying {} from {}".format(
                     filename, source_folder))
                 shutil.copy2(
                     os.path.join(source_folder, filename),
@@ -350,7 +350,7 @@ def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
             if os.path.exists(os.path.join(input_fp, filename + suffix)):
                 return
 
-    # Otherwise we will have to copy it from either a different filename or a different folder
+    # Otherwise copy it from either a different filename or a different folder.
     if not setting_val:
         srcfilename = filename
         search_folders = [modeldata_fp]
@@ -402,7 +402,9 @@ def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
 
         if 'events' in file_list:
             if 'event_set' in model_settings:
-                setting_val = str(model_settings.get('event_set')).replace(' ', '_').lower()
+                setting_val = (str(model_settings.get('event_set'))
+                               .replace(' ', '_')
+                               .lower())
             copy_run_input_file('events', setting_val, destn_path, model_data_fp)
 
         if 'returnperiods' in file_list:
@@ -410,7 +412,9 @@ def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
         
         if 'occurrence' in file_list:
             if 'event_occurrence_id' in model_settings:
-                setting_val = str(model_settings.get('event_occurrence_id')).replace(' ', '_').lower()
+                setting_val = (str(model_settings.get('event_occurrence_id'))
+                               .replace(' ', '_')
+                               .lower())
             copy_run_input_file('occurrence', setting_val, destn_path,
                                 model_data_fp)
 
@@ -556,14 +560,16 @@ def check_binary_tar_file(tar_file_path, check_il=False):
     expected_members = ('{}.bin'.format(f['name']) for f in GUL_INPUT_FILES.values())
 
     if check_il:
-        expected_members = chain(expected_members, ('{}.bin'.format(f['name']) for f in IL_INPUT_FILES.values()))
+        expected_members = chain(expected_members, ('{}.bin'.format(f['name'])
+                                                    for f in IL_INPUT_FILES.values()))
 
     with tarfile.open(tar_file_path) as tar:
         for member in expected_members:
             try:
                 tar.getmember(member)
             except KeyError:
-                raise OasisException('{} is missing from the tar file {}.'.format(member, tar_file_path))
+                raise OasisException('{} is missing from the tar file {}.'.format(
+                    member, tar_file_path))
 
     return True
 
