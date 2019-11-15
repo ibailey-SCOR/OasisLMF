@@ -323,7 +323,7 @@ def get_dataframe(
         _required_cols = [c.lower() for c in required_cols] if lowercase_cols else required_cols
         missing = {col for col in sorted(_required_cols)}.difference(df.columns)
         if missing:
-            raise OasisException('Missing required columns: {}'.format(missing))
+            warnings.warn('Missing columns from loc file: {}'.format(missing))
 
     # Defaulting of column values is best done via the source data and not the
     # code, i.e. if a column 'X' in a frame is supposed to have 0s everywhere
