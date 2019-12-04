@@ -583,7 +583,7 @@ class OasisManager(object):
         is_ri = analysis_settings['ri_output']
 
         # Check whether it is a gul only analysis, meaning not item stream
-        if not ktools_alloc_rule_gul:
+        if ktools_alloc_rule_gul is None:
             ktools_alloc_rule_gul = self.ktools_alloc_rule_gul
 
         if (ktools_alloc_rule_gul == 0) or (not is_il):
