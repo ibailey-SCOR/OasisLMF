@@ -87,9 +87,21 @@ def create_analysis_settings_json(directory):
     return output_json
 
 
-def read_analysis_settings(analysis_settings_fp, il_files_exist=False,
-                           ri_files_exist=False):
-    """Read the analysis settings file"""
+def read_analysis_settings(analysis_settings_fp, il_files_exist=True,
+                           ri_files_exist=True):
+    """Read the analysis settings file
+
+    Arguments:
+        analysis_settings_fp: (str) filename for the analysis settings json
+
+        il_files_exist: (bool) flag in case we know that necessary insured loss files
+        do not exist. Default True
+
+        ri_files_exist: (bool) flag in case we know that
+
+    Returns:
+        analysis_settings: (dict) a dict representation of the input json file
+    """
 
 
     # Load analysis_settings file
