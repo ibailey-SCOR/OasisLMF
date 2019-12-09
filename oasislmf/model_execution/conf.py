@@ -103,7 +103,6 @@ def read_analysis_settings(analysis_settings_fp, il_files_exist=True,
         analysis_settings: (dict) a dict representation of the input json file
     """
 
-
     # Load analysis_settings file
     try:
         # Load as a json
