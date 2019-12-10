@@ -10,6 +10,7 @@ __all__ = [
     'get_json',
     'get_timestamp',
     'get_utctimestamp',
+    'merge_check',
     'merge_dataframes',
     'PANDAS_BASIC_DTYPES',
     'PANDAS_DEFAULT_NULL_VALUES',
@@ -471,6 +472,36 @@ def get_utctimestamp(thedate=datetime.utcnow(), fmt='%Y-%b-%d %H:%M:%S'):
     return thedate.astimezone(pytz.utc).strftime(fmt)
 
 
+def merge_check(left, right, on=[], raise_error=True):
+    """
+    Check two dataframes for keys intersection, use before performing a merge
+
+    :param left: The first of two dataframes to be merged
+    :type left: pd.DataFrame
+
+    :param right: The second of two dataframes to be merged
+    :type left: pd.DataFrame
+
+    :param on: column keys to test
+    :type on: list
+
+    :return: A dict of booleans, True for an intersection between left/right
+    :rtype: dict
+
+    {'portnumber': False, 'accnumber': True, 'layer_id': True, 'condnumber': True}
+    """
+    keys_checked = {}
+    for key in on:
+        key_intersect = set(left[key].unique()).intersection(right[key].unique())
+        keys_checked[key] = bool(key_intersect)
+
+    if raise_error and not all(keys_checked.values()):
+        err_msg = "Error: Merge mismatch on column(s) {}".format(
+            [k for k in keys_checked if not keys_checked[k]]
+        )
+        raise OasisException(err_msg)
+
+
 def merge_dataframes(left, right, join_on=None, **kwargs):
     """
     Merges two dataframes by ensuring there is no duplication of columns.
@@ -490,9 +521,6 @@ def merge_dataframes(left, right, join_on=None, **kwargs):
     :return: A merged dataframe
     :rtype: pd.DataFrame
     """
-    _left = left.copy(deep=True)
-    _right = right.copy(deep=True)
-
     merge = None
 
     if not join_on:
@@ -500,31 +528,27 @@ def merge_dataframes(left, right, join_on=None, **kwargs):
         left_keys = [left_keys] if isinstance(left_keys, str) else left_keys
 
         drop_cols = [
-            k for k in set(_left.columns).intersection(_right.columns)
+            k for k in set(left.columns).intersection(right.columns)
             if k and k not in left_keys
         ]
-
         drop_duplicates = kwargs.get('drop_duplicates', True)
         kwargs.pop('drop_duplicates') if 'drop_duplicates' in kwargs else None
 
         merge = pd.merge(
-            _left.drop(drop_cols, axis=1),
-            _right,
+            left.drop(drop_cols, axis=1),
+            right,
             **kwargs
         )
-        del [_left, _right]
 
         return merge if not drop_duplicates else merge.drop_duplicates()
     else:
         _join_on = [join_on] if isinstance(join_on, str) else join_on.copy()
-        _left.set_index(_join_on, inplace=True)
-        _right.set_index(_join_on, inplace=True)
-
-        drop_cols = list(set(_left.columns).intersection(_right.columns).difference(_join_on))
-        _right.drop(drop_cols, axis=1, inplace=True)
+        drop_cols = list(set(left.columns).intersection(right.columns).difference(_join_on))
+        _left = left.set_index(_join_on)
+        _right = right.drop(drop_cols, axis=1).set_index(_join_on)
 
         join = _left.join(_right, how=(kwargs.get('how') or 'left')).reset_index()
-        del [_left, _right]
+        del _left, _right
 
         return join
 
