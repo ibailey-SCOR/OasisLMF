@@ -112,6 +112,7 @@ def read_exposure_df(exposure_fp, exposure_profile=get_default_exposure_profile(
         **{t: 'uint32' for t in ['loc_id']}
     }
 
+    # TODO: required columns are not required if loc_id doesn't yet exist
     exposure_df = get_dataframe(
         src_fp=exposure_fp,
         required_cols=(loc_num, acc_num, portfolio_num,),
