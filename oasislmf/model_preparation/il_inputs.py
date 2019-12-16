@@ -392,8 +392,7 @@ def get_il_input_items(
         }
         il_inputs_df = set_dataframe_column_dtypes(il_inputs_df, dtypes)
 
-        # Drop any items with layer IDs > 1, reset index ad order items by
-        # GUL input ID.
+        # Drop any items with layer IDs > 1, reset index ad order items by GUL input ID.
         il_inputs_df = il_inputs_df[il_inputs_df['layer_id'] == 1]
         il_inputs_df.reset_index(drop=True, inplace=True)
         il_inputs_df.sort_values('gul_input_id', axis=0, inplace=True)
@@ -534,6 +533,10 @@ def get_il_input_items(
         il_inputs_df = pd.concat([il_inputs_df, layer_df], sort=True, ignore_index=True)
         il_inputs_df.drop(term_cols, axis=1, inplace=True)
         del layer_df
+
+        # Sort to make sure we have the same order for each level
+        il_inputs_df = il_inputs_df.sort_values(['level_id', 'layer_id', 'loc_id',
+                                                 'coverage_id']).reset_index(drop=True)
 
         # Resequence the level IDs and item IDs, but also store the "original"
         # FM level IDs (before the resequencing)
@@ -687,36 +690,45 @@ def write_fm_programme_file(il_inputs_df, fm_programme_fp, chunksize=100000):
     :rtype: str
     """
     try:
+
         fm_programme_df = pd.concat(
             [
                 il_inputs_df[il_inputs_df['level_id'] == il_inputs_df['level_id'].min()].loc[:, ['agg_id']].assign(level_id=0),
-                il_inputs_df.loc[:, ['level_id', 'agg_id']]
+                il_inputs_df.loc[il_inputs_df.layer_id == 1, ['level_id', 'agg_id']]
+#                il_inputs_df.loc[:, ['level_id', 'agg_id']]
             ]
         ).reset_index(drop=True)
 
         min_level, max_level = 0, fm_programme_df['level_id'].max()
 
+        from_agg_id = fm_programme_df.loc[fm_programme_df['level_id'] < max_level,
+                                          'agg_id'].values
+        level_id = fm_programme_df.loc[fm_programme_df['level_id'] > min_level,
+                                          'level_id'].values
+        to_agg_id = fm_programme_df.loc[fm_programme_df['level_id'] > min_level,
+                                          'agg_id'].values
+
         fm_programme_df = pd.DataFrame(
             {
-                'from_agg_id': fm_programme_df[fm_programme_df['level_id'] < max_level]['agg_id'],
-                'level_id': fm_programme_df[fm_programme_df['level_id'] > min_level]['level_id'].reset_index(drop=True),
-                'to_agg_id': fm_programme_df[fm_programme_df['level_id'] > min_level]['agg_id'].reset_index(drop=True)
+                'from_agg_id': from_agg_id,
+                'level_id': level_id,
+                'to_agg_id': to_agg_id
             }
         ).dropna(axis=0).drop_duplicates()
 
-        # TODO: work out why this is crashing
-        max_level_agg_ids = il_inputs_df[il_inputs_df['level_id'] == max_level].loc[:, ['loc_id', 'agg_id']].drop_duplicates()['agg_id'].tolist()
-        if len(set(max_level_agg_ids)) == 1:
-            max_level_agg_ids = [max_level_agg_ids[0]]
 
-        if len(max_level_agg_ids) == (fm_programme_df['level_id'] == max_level).sum():
-            # Replace
-            fm_programme_df.loc[fm_programme_df[fm_programme_df['level_id'] == max_level].index, ['to_agg_id']] = max_level_agg_ids
-        else:
-            warnings.warn(("Mismatch when trying to replace agg_ids at the " +
-                           "max level {} vs {}").format(
-                              (fm_programme_df['level_id'] == max_level).sum(),
-                              len(max_level_agg_ids)))
+        # max_level_agg_ids = il_inputs_df[il_inputs_df['level_id'] == max_level].loc[:, ['loc_id', 'agg_id']].drop_duplicates()['agg_id'].tolist()
+        # if len(set(max_level_agg_ids)) == 1:
+        #     max_level_agg_ids = [max_level_agg_ids[0]]
+        #
+        # if len(max_level_agg_ids) == (fm_programme_df['level_id'] == max_level).sum():
+        #     # Replace
+        #     fm_programme_df.loc[fm_programme_df[fm_programme_df['level_id'] == max_level].index, ['to_agg_id']] = max_level_agg_ids
+        # else:
+        #     warnings.warn(("Mismatch when trying to replace agg_ids at the " +
+        #                    "max level {} vs {}").format(
+        #                       (fm_programme_df['level_id'] == max_level).sum(),
+        #                       len(max_level_agg_ids)))
 
         dtypes = {t: 'uint32' for t in fm_programme_df.columns}
         fm_programme_df = set_dataframe_column_dtypes(fm_programme_df, dtypes)
