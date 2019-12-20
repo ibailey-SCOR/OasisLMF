@@ -26,6 +26,7 @@ from ..utils.data import (
     fast_zip_arrays,
     get_dataframe,
     get_ids,
+    merge_check,
     merge_dataframes,
     set_dataframe_column_dtypes,
 )
@@ -312,6 +313,13 @@ def get_il_input_items(
         dtypes = {t: 'float64' for t in site_pd_and_site_all_term_cols}
         gul_inputs_df = set_dataframe_column_dtypes(gul_inputs_df, dtypes)
 
+        # check for empty intersection between dfs
+        merge_check(
+            gul_inputs_df[[portfolio_num, acc_num, 'layer_id', cond_num]],
+            accounts_df[[portfolio_num, acc_num, 'layer_id', cond_num]],
+            on=[portfolio_num, acc_num, 'layer_id', cond_num]
+        )
+
         # Construct a basic IL inputs frame by merging the combined exposure +
         # GUL inputs frame above, with the accounts frame, on portfolio no.,
         # account no. and layer ID (by default items in the GUL inputs frame
@@ -427,11 +435,13 @@ def get_il_input_items(
         ]
         fm_levels_with_no_terms = list(set(list(SUPPORTED_FM_LEVELS)[1:-1]).difference(intermediate_fm_levels))
         no_terms_cols = get_fm_terms_oed_columns(fm_terms, levels=fm_levels_with_no_terms, terms=terms)
-
         il_inputs_df.drop(no_terms_cols, axis=1, inplace=True)
 
         # Define a list of all supported OED coverage types in the exposure
         supp_cov_types = [v['id'] for v in SUPPORTED_COVERAGE_TYPES.values()]
+
+        # For coverage level (level_id = 1) set the `agg_id` to `coverage id`
+        il_inputs_df.agg_id = il_inputs_df.coverage_id
 
         # The main loop for processing the financial terms for the sub-layer
         # non-coverage levels - currently these are site pd (# 2), site all (# 3),
@@ -715,20 +725,6 @@ def write_fm_programme_file(il_inputs_df, fm_programme_fp, chunksize=100000):
                 'to_agg_id': to_agg_id
             }
         ).dropna(axis=0).drop_duplicates()
-
-
-        # max_level_agg_ids = il_inputs_df[il_inputs_df['level_id'] == max_level].loc[:, ['loc_id', 'agg_id']].drop_duplicates()['agg_id'].tolist()
-        # if len(set(max_level_agg_ids)) == 1:
-        #     max_level_agg_ids = [max_level_agg_ids[0]]
-        #
-        # if len(max_level_agg_ids) == (fm_programme_df['level_id'] == max_level).sum():
-        #     # Replace
-        #     fm_programme_df.loc[fm_programme_df[fm_programme_df['level_id'] == max_level].index, ['to_agg_id']] = max_level_agg_ids
-        # else:
-        #     warnings.warn(("Mismatch when trying to replace agg_ids at the " +
-        #                    "max level {} vs {}").format(
-        #                       (fm_programme_df['level_id'] == max_level).sum(),
-        #                       len(max_level_agg_ids)))
 
         dtypes = {t: 'uint32' for t in fm_programme_df.columns}
         fm_programme_df = set_dataframe_column_dtypes(fm_programme_df, dtypes)
