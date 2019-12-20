@@ -1,27 +1,27 @@
 """
-    Python utilities used for setting up the structure of the run directory
+    Python utilities used for setting up the structure of the run directory.
     in which to prepare the inputs to run a model or generate deterministic
     losses, and store the outputs.
 """
 __all__ = [
     'check_binary_tar_file',
-    'check_conversion_tools',
     'check_inputs_directory',
     'cleanup_bin_directory',
     'create_binary_tar_file',
     'csv_to_bin',
     'prepare_run_directory',
-    'prepare_run_inputs'
+    'prepare_run_inputs',
+    'copy_input_files',
+    'copy_static_files'
 ]
 
 import filecmp
 import glob
 import logging
 import os
+import errno
 import re
 import shutil
-import shutilwhich
-import subprocess
 import tarfile
 
 from itertools import chain
@@ -29,6 +29,9 @@ from itertools import chain
 from pathlib2 import Path
 
 from ..utils.exceptions import OasisException
+from ..utils.file_conversion import (csvfile_to_bin,
+                                     get_necessary_conversions,
+                                     get_occurrence_csvtobin_options)
 from ..utils.log import oasis_log
 from .files import TAR_FILE, INPUT_FILES, GUL_INPUT_FILES, IL_INPUT_FILES
 
@@ -119,6 +122,7 @@ def prepare_run_directory(
     :type user_data_dir: str
     """
     try:
+        # Create folders
         for subdir in ['fifo', 'output', 'static', 'work']:
             Path(run_dir, subdir).mkdir(parents=True, exist_ok=True)
 
@@ -129,33 +133,14 @@ def prepare_run_directory(
                 p = os.path.join(run_dir, 'input') if not ri else os.path.join(run_dir)
                 input_tarfile.extractall(path=p)
 
-        oasis_dst_fp = os.path.join(run_dir, 'input')
-
-        for p in os.listdir(oasis_src_fp):
-            src = os.path.join(oasis_src_fp, p)
-            if src.endswith('.tar') or src.endswith('.tar.gz'):
-                continue
-            dst = os.path.join(oasis_dst_fp, p)
-            if not (re.match(r'RI_\d+$', p) or p == 'ri_layers.json'):
-                shutil.copy2(src, oasis_dst_fp) if not (os.path.exists(dst) and filecmp.cmp(src, dst)) else None
-            else:
-                shutil.move(src, run_dir)
-
+        # Copy analysis settings into the run folder
         dst = os.path.join(run_dir, 'analysis_settings.json')
-        shutil.copy(analysis_settings_fp, dst) if not (os.path.exists(dst) and filecmp.cmp(analysis_settings_fp, dst, shallow=False)) else None
+        if not (os.path.exists(dst) and
+                filecmp.cmp(analysis_settings_fp, dst, shallow=False)):
+            shutil.copy(analysis_settings_fp, dst)
 
-        model_data_dst_fp = os.path.join(run_dir, 'static')
-
-        for path in glob.glob(os.path.join(model_data_fp, '*')):
-            fn = os.path.basename(path)
-            try:
-                if os.name == 'nt':
-                    shutil.copy(path, os.path.join(model_data_dst_fp, fn))
-                else:
-                    os.symlink(path, os.path.join(model_data_dst_fp, fn))
-            except Exception:
-                shutil.copytree(model_data_fp, os.path.join(model_data_dst_fp, fn))
-
+        # Copy user data
+        oasis_dst_fp = os.path.join(run_dir, 'input')
         if user_data_dir and os.path.exists(user_data_dir):
             for path in glob.glob(os.path.join(user_data_dir, '*')):
                 fn = os.path.basename(path)
@@ -171,23 +156,238 @@ def prepare_run_directory(
         raise OasisException from e
 
 
-def _prepare_input_bin(run_dir, bin_name, model_settings, setting_key=None, ri=False):
-    bin_fp = os.path.join(run_dir, 'input', '{}.bin'.format(bin_name))
-    if not os.path.exists(bin_fp):
-        setting_val = model_settings.get(setting_key)
+def link_or_copy_file(filename, source_folder, destination_folder):
+    """Try to create a symbolic link for a file, otherwise copy it
 
-        if not setting_val:
-            model_data_bin_fp = os.path.join(run_dir, 'static', '{}.bin'.format(bin_name))
+    filename: (str) name of the file without path including suffix
+
+    source_folder: (str) folder from which to link/copy
+
+    desintation_folder: (str) folder to which we link or copy
+
+    returns nothing, but will raise an error if neither link or copy is possible
+
+    """
+
+    # Check if the file exists
+    if not os.path.exists(os.path.join(source_folder, filename)):
+        raise OasisException("Source file {} doesn't exist".format(
+            os.path.join(source_folder, filename)))
+
+    # Make a soft link of the file in the new folder
+    sourcefile = os.path.join(source_folder, filename)
+    destfile = os.path.join(destination_folder, filename)
+    try:
+        # Use symbolic link if we can
+        os.symlink(sourcefile, destfile)
+        print("\tLinking {} from {}".format(filename, source_folder))
+
+    except OSError as why:
+        if why.errno == errno.EEXIST and os.path.islink(destfile):
+            # If the link already exists, check files are different replace it
+            if os.readlink(destfile) != os.abspath(sourcefile):
+                os.symlink(sourcefile, destfile + ".tmp")
+                os.replace(destfile + ".tmp", destfile)
+                print("\tLinking {} from {}".format(filename, source_folder))
+
         else:
-            # Format for data file names
-            setting_val = str(setting_val).replace(' ', '_').lower()
-            model_data_bin_fp = os.path.join(run_dir, 'static', '{}_{}.bin'.format(bin_name, setting_val))
+            # Otherwise try to copy the file (probably necessary on windows)
+            try:
+                print("\tError creating symbolic link. Copying {} from {}".format(
+                    filename, source_folder))
+                shutil.copy2(
+                    os.path.join(source_folder, filename),
+                    os.path.join(destination_folder, filename))
 
-        if not os.path.exists(model_data_bin_fp):
-            raise OasisException('Could not find {} data file: {}'.format(bin_name, model_data_bin_fp))
+            except OSError as e:
+                raise OasisException from e
 
-        shutil.copyfile(model_data_bin_fp, bin_fp)
 
+def copy_static_files(run_dir, model_data_fp, analysis_settings):
+    """Link or copy files into the static folder
+
+    run_dir: (str) the ktools run folder path
+    model_data_fp: (str) the file path for original static data files
+    analysis_settings: (dict) the oasislmf format analysis settings
+    """
+
+    # Force use of the full path for the source
+    model_data_fp = os.path.abspath(model_data_fp)
+
+    # Start with list of files that are always required
+    static_files0 = ['footprint', 'vulnerability', 'damage_bin_dict']
+
+    # Check if random is required
+    if 'model_settings' in analysis_settings:
+        if (('use_random_number_file'in analysis_settings['model_settings']) and
+                (analysis_settings['model_settings']['use_random_number_file'])):
+            static_files0.append('random')
+
+    # Add the bin suffix
+    static_files = [f + ".bin" for f in static_files0]
+    static_files.append("footprint.idx")
+
+    # Add the non-keys dict files if they exist
+    optional_files = ['event_dict.csv', 'intensity_bin_dict.csv']
+    optional_files += [f + ".csv" for f in static_files0]
+    for fnm in optional_files:
+        if os.path.exists(os.path.join(model_data_fp, fnm)):
+            static_files.append(fnm)
+
+    # Get the destination folder path.
+    model_data_dst_fp = os.path.join(run_dir, 'static')
+
+    # Loop through each file and create a link to it
+    for fnm in static_files:
+        link_or_copy_file(fnm, model_data_fp, model_data_dst_fp)
+
+    # Copy the model version info into the main analysis folder
+    model_version_file = os.path.join(model_data_fp, 'ModelVersion.csv')
+    if os.path.exists(model_version_file):
+        shutil.copy2(model_version_file, run_dir)
+
+
+def copy_input_files(run_dir, oasis_src_fp, analysis_settings):
+    """Copy all input files into the 'input' subfolder of the ktools run folder.
+
+
+    run_dir: (str) the file path of the ktools run folder, files will be put into the
+    'input' sub-folder
+
+    oasis_src_fp: (str) the file path of the source folder containing the input files
+    """
+
+    input_files = ['items.csv', 'coverages.csv', 'gul_summary_map.csv']
+
+    if analysis_settings['il_output']:
+        input_files += ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
+                        'fm_xref.csv', 'fm_summary_map.csv']
+
+    oasis_dst_fp = os.path.join(run_dir, 'input')
+    try:
+        for p in input_files:
+            src = os.path.join(oasis_src_fp, p)
+            dst = os.path.join(oasis_dst_fp, p)
+
+            # Make a copy unless the file is already there
+            shutil.copy2(src, oasis_dst_fp) if not (
+                        os.path.exists(dst) and filecmp.cmp(src, dst)) else None
+
+        # optional files
+        for p in ['complex_items.csv', 'events.csv', 'occurrence.csv',
+                  'returnperiods.csv', 'periods.csv']:
+            src = os.path.join(oasis_src_fp, p)
+            if os.path.exists(src):
+                dst = os.path.join(oasis_dst_fp, p)
+                if not (os.path.exists(dst) and filecmp.cmp(src, dst)):
+                    shutil.copy2(src, oasis_dst_fp)
+
+        # Re insurance files & folders
+        if analysis_settings['ri_output']:
+            for p in os.listdir(os.path.join(oasis_src_fp)):
+                src = os.path.join(oasis_src_fp, p)
+                if re.match(r'RI_\d+$', p) or p == 'ri_layers.json':
+                    shutil.move(src, run_dir)
+
+    except OSError as e:
+        raise OasisException from e
+
+
+def list_required_run_inputs(analysis_settings):
+    """Get list of required run inputs (not exposure related) based on analysis settings.
+
+    analysis_settings: (dict) oasislmf format analysis settings
+
+    Returns a list of filenames as expected by ktools, without any file suffixes.
+    """
+
+    # Events file is always required
+    input_files = ['events']
+
+    # Flag for if return periods and occurrences files are required
+    is_rp = False
+    is_occ = False
+
+    for summary_type in ['gul_summaries', 'il_summaries', 'ri_summaries']:
+        if summary_type not in analysis_settings:
+            continue
+
+        # Loop through each of the summary levels requested in the analysis settings
+        for summary in analysis_settings[summary_type]:
+
+            # Occurrence is needed for AAL or loss-exceedance curve outputs
+            if 'aalcalc' in summary and summary['aalcalc'] is True:
+                is_occ = True
+            if 'leccalc' in summary:
+                is_occ = True
+
+                # Return period is needed if flagged in analysis settings
+                if ('return_period_file' in summary['leccalc'] and
+                        summary['leccalc']['return_period_file'] is True):
+                    is_rp = True
+
+    if is_occ:
+        input_files.append('occurrence')
+
+    if is_rp:
+        input_files.append('returnperiods')
+
+    # TODO: periods
+
+    return input_files
+
+
+def copy_run_input_file(filename, setting_val, input_fp, modeldata_fp):
+    """ Copy and rename run input file into the model run "input" folder.
+
+    Run inputs include 'events', 'occurrence', 'periods', 'returnperiods'
+
+    Run inputs can have non-standard names (e.g. events_model1.csv events_model2.csv),
+    and we indicate which file we want via the settings file. This function gets the
+    approapriate filename based on the settings, then copys the file into the 'input'
+    sub-folder of the analysis folder.
+
+    The existing run inputs can be in either an existing source input folder, or in the
+    model data falder. They can be either csv or bin files.
+
+    filename (str): which input file (using standard naming)
+
+    setting_val (str): filename modifier based on the settings. Empty string or None to
+    use standard name.
+
+    input_fp (str): the source input folder to look in
+
+    modeldata_fp (str): the path of the model data folder to look in
+
+    An error will be raised if neither bin or csv can be found
+
+    """
+
+    # Check if the file exists already in input folder with the right name
+    if not setting_val:
+        for suffix in ['.bin', '.csv']:
+            if os.path.exists(os.path.join(input_fp, filename + suffix)):
+                return
+
+    # Otherwise we will have to copy it from either a different filename or a different folder
+    if not setting_val:
+        srcfilename = filename
+        search_folders = [modeldata_fp]
+    else:
+        srcfilename = "{}_{}".format(filename, setting_val)
+        search_folders = [input_fp, modeldata_fp]
+
+    for folder in search_folders:
+        for suffix in [".bin", ".csv"]:
+            src_fp = os.path.join(folder, srcfilename + suffix)
+            dest_fp = os.path.join(input_fp, filename + suffix)
+            if os.path.exists(src_fp):
+                shutil.copy2(src_fp, dest_fp)
+                return
+
+    # If we get here, the file has not been found
+    raise OasisException("File {} was not found as csv or bin in {} or {}".format(
+        srcfilename, input_fp, modeldata_fp))
 
 def _calc_selected(analysis_settings, calc_type):
     """
@@ -205,31 +405,59 @@ def _calc_selected(analysis_settings, calc_type):
     return any([is_in_gul, is_in_il, is_in_ri])
 
 @oasis_log
-def prepare_run_inputs(analysis_settings, run_dir, ri=False):
-    """
-    Sets up binary files in the model inputs directory.
+def prepare_run_inputs(analysis_settings, run_dir, model_data_fp=None):
+    """Sets up binary files in the model inputs directory.
 
     :param analysis_settings: model analysis settings dict
     :type analysis_settings: dict
 
     :param run_dir: model run directory
     :type run_dir: str
+
+    :param model_data_fp: folder containing the model data, default is none
+    :type model_data_fp: str
+
+    :returns: a list of files that are required according to the analysis settings
     """
+
+    # Get a list of the run-input files that are needed
+    file_list = list_required_run_inputs(analysis_settings)
+
+    # Get model settings, which has any filename identifier for specific set of
+    # events/occurrences.
+    model_settings = analysis_settings.get('model_settings', {})
+    setting_val = None
+
+    # Get the destination path
+    destn_path = os.path.join(run_dir, 'input')
+
     try:
-        model_settings = analysis_settings.get('model_settings', {})
-        _prepare_input_bin(run_dir, 'events', model_settings, setting_key='event_set', ri=ri)
 
-        # Prepare occurrence / returnperiod depending on output calcs selected
-        if _calc_selected(analysis_settings, 'lec_output'):
-            _prepare_input_bin(run_dir, 'returnperiods', model_settings, ri=ri)
-            _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
-        elif _calc_selected(analysis_settings, 'pltcalc') or _calc_selected(analysis_settings, 'aalcalc'):
-            _prepare_input_bin(run_dir, 'occurrence', model_settings, setting_key='event_occurrence_id', ri=ri)
+        if 'events' in file_list:
+            if 'event_set' in model_settings:
+                setting_val = (str(model_settings.get('event_set'))
+                               .replace(' ', '_')
+                               .lower())
+            copy_run_input_file('events', setting_val, destn_path, model_data_fp)
 
-        if os.path.exists(os.path.join(run_dir, 'static', 'periods.bin')):
-            _prepare_input_bin(run_dir, 'periods', model_settings, ri=ri)
+        if 'returnperiods' in file_list:
+            copy_run_input_file('returnperiods', None, destn_path, model_data_fp)
+        
+        if 'occurrence' in file_list:
+            if 'event_occurrence_id' in model_settings:
+                setting_val = (str(model_settings.get('event_occurrence_id'))
+                               .replace(' ', '_')
+                               .lower())
+            copy_run_input_file('occurrence', setting_val, destn_path,
+                                model_data_fp)
+
+        if 'periods' in file_list:
+            copy_run_input_file('periods', setting_val, destn_path, model_data_fp)
+
     except (OSError, IOError) as e:
         raise OasisException from e
+
+    return file_list
 
 
 @oasis_log
@@ -243,8 +471,8 @@ def check_inputs_directory(directory_to_check, il=False, ri=False, check_binarie
     :param il: check insuured loss files
     :type il: bool
 
-    :param il: check resinsurance sub-folders
-    :type il: bool
+    :param ri: check resinsurance sub-folders
+    :type ri: bool
 
     :param check_binaries: check binary files are not present
     :type check_binaries: bool
@@ -279,9 +507,9 @@ def _check_each_inputs_directory(directory_to_check, il=False, check_binaries=Tr
 
 
 @oasis_log
-def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
-    """
-    Create the binary files.
+def csv_to_bin(csv_directory, bin_directory, run_input_files, il=False, ri=False,
+               analysis_settings=None):
+    """Make sure we have all .bin files in the input sub-folder
 
     :param csv_directory: the directory containing the CSV files
     :type csv_directory: str
@@ -289,11 +517,17 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
     :param bin_directory: the directory to write the binary files
     :type bin_directory: str
 
+    :param run_input_files: list of run inputs that also need to be in the inputs folder
+
     :param il: whether to create the binaries required for insured loss calculations
     :type il: bool
 
     :param ri: whether to create the binaries required for reinsurance calculations
     :type ri: bool
+
+    :param analysis_settings: oasislmf analysis settings dict. Needed for occurrence
+    file conversion
+    :type analysis_settings: dict
 
     :raises OasisException: If one of the conversions fails
     """
@@ -302,39 +536,42 @@ def csv_to_bin(csv_directory, bin_directory, il=False, ri=False):
 
     il = il or ri
 
-    _csv_to_bin(csvdir, bindir, il)
+    if il:
+        # If insured loss, then consider all files
+        input_files0 = [f['name'] for f in INPUT_FILES.values()]
+    else:
+        # If GUL loss, don't consider those flagged as 'il'
+        input_files0 = [f['name'] for f in INPUT_FILES.values() if f['type'] != 'il']
 
+    # Append the run input files
+    input_files = input_files0 + run_input_files
+
+    # Check which conversions are needed
+    input_files = get_necessary_conversions(input_files, csvdir, bindir)
+
+    if not input_files:
+        # If no conversions are necessary, print a message and exit
+        print("input csv_to_bin: no conversions needed")
+        return
+
+    # Do the conversions
+    for f in input_files:
+        # Set up command line options
+        if f == "occurrence":
+            options = get_occurrence_csvtobin_options(csvdir, analysis_settings)
+        else:
+            # All others, no options are needed
+            options = ""
+
+        csvfile_to_bin(f, csvdir, bindir, options)
+
+    # In case of reinsurance, we have sub-folders
     if ri:
         for ri_csvdir in glob.glob('{}{}RI_[0-9]*'.format(csvdir, os.sep)):
-            _csv_to_bin(
-                ri_csvdir, os.path.join(bindir, os.path.basename(ri_csvdir)), il=True)
-
-
-def _csv_to_bin(csv_directory, bin_directory, il=False):
-    """
-    Create a set of binary files.
-    """
-    if not os.path.exists(bin_directory):
-        os.mkdir(bin_directory)
-
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
-
-    for input_file in input_files:
-        conversion_tool = input_file['conversion_tool']
-        input_file_path = os.path.join(csv_directory, '{}.csv'.format(input_file['name']))
-        if not os.path.exists(input_file_path):
-            continue
-
-        output_file_path = os.path.join(bin_directory, '{}.bin'.format(input_file['name']))
-        cmd_str = "{} < {} > {}".format(conversion_tool, input_file_path, output_file_path)
-
-        try:
-            subprocess.check_call(cmd_str, stderr=subprocess.STDOUT, shell=True)
-        except subprocess.CalledProcessError as e:
-            raise OasisException from e
+            ri_bindir = os.path.join(bindir, os.path.basename(ri_csvdir))
+            input_files = get_necessary_conversions(input_files0, ri_csvdir, ri_bindir)
+            for f in input_files:
+                csvfile_to_bin(f, ri_csvdir, ri_bindir, "")
 
 
 @oasis_log
@@ -356,14 +593,16 @@ def check_binary_tar_file(tar_file_path, check_il=False):
     expected_members = ('{}.bin'.format(f['name']) for f in GUL_INPUT_FILES.values())
 
     if check_il:
-        expected_members = chain(expected_members, ('{}.bin'.format(f['name']) for f in IL_INPUT_FILES.values()))
+        expected_members = chain(expected_members, ('{}.bin'.format(f['name'])
+                                                    for f in IL_INPUT_FILES.values()))
 
     with tarfile.open(tar_file_path) as tar:
         for member in expected_members:
             try:
                 tar.getmember(member)
             except KeyError:
-                raise OasisException('{} is missing from the tar file {}.'.format(member, tar_file_path))
+                raise OasisException('{} is missing from the tar file {}.'.format(
+                    member, tar_file_path))
 
     return True
 
@@ -374,7 +613,7 @@ def create_binary_tar_file(directory):
     Package the binaries in a gzipped tar.
 
     :param directory: Path containing the binaries
-    :type tar_file_path: str
+    :type directory: str
     """
     with tarfile.open(os.path.join(directory, TAR_FILE), "w:gz") as tar:
         for f in glob.glob('{}*{}*.bin'.format(directory, os.sep)):
@@ -385,32 +624,6 @@ def create_binary_tar_file(directory):
         for f in glob.glob('{}*{}*{}*.bin'.format(directory, os.sep, os.sep)):
             relpath = os.path.relpath(f, directory)
             tar.add(f, arcname=relpath)
-
-
-@oasis_log
-def check_conversion_tools(il=False):
-    """
-    Check that the conversion tools are available
-
-    :param il: Flag whether to check insured loss tools
-    :type il: bool
-
-    :return: True if all required tools are present, False otherwise
-    :rtype: bool
-    """
-    if il:
-        input_files = INPUT_FILES.values()
-    else:
-        input_files = (f for f in INPUT_FILES.values() if f['type'] != 'il')
-
-    for input_file in input_files:
-        tool = input_file['conversion_tool']
-        if shutilwhich.which(tool) is None:
-            error_message = "Failed to find conversion tool: {}".format(tool)
-            logging.error(error_message)
-            raise OasisException(error_message)
-
-    return True
 
 
 @oasis_log
