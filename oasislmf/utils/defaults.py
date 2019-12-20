@@ -9,22 +9,24 @@ __all__ = [
     'get_acc_dtypes',
     'get_scope_dtypes',
     'get_info_dtypes',
-    'KTOOLS_ALLOC_RULE_IL',
-    'KTOOLS_ALLOC_RULE_GUL',
+    'store_exposure_fp',
+    'find_exposure_fp',
+    'KTOOLS_ALLOC_GUL_MAX',
+    'KTOOLS_ALLOC_FM_MAX',
     'KTOOLS_FIFO_RELATIVE',
     'KTOOLS_DEBUG',
-    'KTOOLS_MEM_LIMIT',
+    'KTOOLS_ERR_GUARD',
     'KTOOLS_NUM_PROCESSES',
     'OASIS_FILES_PREFIXES',
     'SUMMARY_MAPPING',
     'SUMMARY_OUTPUT',
     'SOURCE_IDX',
-    'SOURCE_FILENAMES',
     'STATIC_DATA_FP',
     'WRITE_CHUNKSIZE'
 ]
 
 import os
+import glob
 
 from collections import OrderedDict
 
@@ -65,6 +67,38 @@ STATIC_DATA_FP = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__fil
 # (exposure) files, as well as how aggregation of FM input items is performed
 # in the different OED FM levels
 
+
+
+def store_exposure_fp(fp, exposure_type):
+    """
+    Preserve original exposure file extention if its in a pandas supported
+    compressed format
+
+    compression : {‘infer’, ‘gzip’, ‘bz2’, ‘zip’, ‘xz’, None}, default ‘infer’
+                  For on-the-fly decompression of on-disk data. If ‘infer’ and
+                  filepath_or_buffer is path-like, then detect compression from
+                  the following extensions: ‘.gz’, ‘.bz2’, ‘.zip’, or ‘.xz’
+                  (otherwise no decompression).
+
+                  If using ‘zip’, the ZIP file must contain only one data file
+                  to be read in. Set to None for no decompression.
+
+                New in version 0.18.1: support for ‘zip’ and ‘xz’ compression.
+    """
+    compressed_ext = ('.gz', '.bz2', '.zip','.xz')
+    filename = SOURCE_FILENAMES[exposure_type]
+    if fp.endswith(compressed_ext):
+        return '.'.join([filename, fp.rsplit('.')[-1]])
+    else:
+        return filename
+
+def find_exposure_fp(input_dir, exposure_type):
+    """
+    Find an OED exposure file stored in the oasis inputs dir
+    while preserving the compressed ext
+    """
+    fp = glob.glob(os.path.join(input_dir, SOURCE_FILENAMES[exposure_type] + '*'))
+    return fp.pop()
 
 def get_default_accounts_profile(path=False):
     fp = os.path.join(STATIC_DATA_FP, 'default_acc_profile.json')
@@ -137,8 +171,12 @@ def get_default_deterministic_analysis_settings(path=False):
 
 # Defaults for Ktools runtime parameters
 KTOOLS_NUM_PROCESSES = -1
-KTOOLS_MEM_LIMIT = False
 KTOOLS_FIFO_RELATIVE = False
-KTOOLS_ALLOC_RULE_IL = 2
-KTOOLS_ALLOC_RULE_GUL = 1     # 1 = new item stream, 0 = use prev Coverage stream
+KTOOLS_ERR_GUARD = True
+KTOOLS_ALLOC_FM_MAX = 3
+KTOOLS_ALLOC_GUL_MAX = 1     # 1 = new item stream, 0 = use prev Coverage stream
+KTOOLS_ALLOC_GUL_DEFAULT = 1
+KTOOLS_ALLOC_IL_DEFAULT = 2
+KTOOLS_ALLOC_RI_DEFAULT = 3
+
 KTOOLS_DEBUG = False
