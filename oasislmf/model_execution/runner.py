@@ -93,14 +93,5 @@ def run(
             filename=filename
         )
 
-    # Don't attempt to run the bash script on windows
-    if os.name == "nt":
-        print("On windows, the bash script is not run automatically since it "
-                      "will fail. It has been generated at \n\t{}".format(filename))
-        return
-
-    try:
-        bash_trace = subprocess.check_output(['bash', filename], stderr=subprocess.STDOUT)
-        logging.info(bash_trace.decode('utf-8'))
-    except subprocess.CalledProcessError as e:
-        raise OasisException('Error running ktools: {}'.format(e.output.decode('utf-8').strip()))
+    bash_trace = subprocess.check_output(['bash', filename])
+    logging.info(bash_trace.decode('utf-8'))

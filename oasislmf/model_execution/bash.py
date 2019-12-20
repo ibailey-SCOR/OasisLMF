@@ -6,12 +6,6 @@ import string
 
 from collections import Counter
 
-from ..model_preparation.oed import (
-    ALLOCATE_TO_ITEMS_BY_PREVIOUS_LEVEL_ALLOC_ID,  # Alloc Rule 2 (Default)
-    ALLOCATE_TO_ITEMS_BY_GUL_ALLOC_ID,             # Alloc Rule 1
-    NO_ALLOCATION_ALLOC_ID,                        # Alloc Rule 0
-)
-
 RUNTYPE_GROUNDUP_LOSS = 'gul'
 RUNTYPE_INSURED_LOSS = 'il'
 RUNTYPE_REINSURANCE_LOSS = 'ri'
@@ -1107,7 +1101,7 @@ def genbash(
             'process_id': process_id,
             'max_process_id': max_process_id,
             'correlated_output': correlated_output_file,
-            'stderr_guard': stderr_guard
+            'stderr_guard': stderr_guard 
         }
 
         # GUL coverage & item stream (Older)

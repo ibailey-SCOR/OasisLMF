@@ -75,12 +75,12 @@ def store_exposure_fp(fp, exposure_type):
     compressed format
 
     compression : {‘infer’, ‘gzip’, ‘bz2’, ‘zip’, ‘xz’, None}, default ‘infer’
-                  For on-the-fly decompression of on-disk data. If ‘infer’ and
-                  filepath_or_buffer is path-like, then detect compression from
-                  the following extensions: ‘.gz’, ‘.bz2’, ‘.zip’, or ‘.xz’
-                  (otherwise no decompression).
-
-                  If using ‘zip’, the ZIP file must contain only one data file
+                  For on-the-fly decompression of on-disk data. If ‘infer’ and 
+                  filepath_or_buffer is path-like, then detect compression from 
+                  the following extensions: ‘.gz’, ‘.bz2’, ‘.zip’, or ‘.xz’ 
+                  (otherwise no decompression). 
+                  
+                  If using ‘zip’, the ZIP file must contain only one data file 
                   to be read in. Set to None for no decompression.
 
                 New in version 0.18.1: support for ‘zip’ and ‘xz’ compression.
@@ -89,14 +89,14 @@ def store_exposure_fp(fp, exposure_type):
     filename = SOURCE_FILENAMES[exposure_type]
     if fp.endswith(compressed_ext):
         return '.'.join([filename, fp.rsplit('.')[-1]])
-    else:
+    else:    
         return filename
 
 def find_exposure_fp(input_dir, exposure_type):
-    """
+    """ 
     Find an OED exposure file stored in the oasis inputs dir
-    while preserving the compressed ext
-    """
+    while preserving the compressed ext  
+    """ 
     fp = glob.glob(os.path.join(input_dir, SOURCE_FILENAMES[exposure_type] + '*'))
     return fp.pop()
 
