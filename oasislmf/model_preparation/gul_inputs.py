@@ -179,7 +179,7 @@ def get_gul_input_items(
         # that include many OED columns.
         exposure_df_gul_inputs_cols = [
             'loc_id', portfolio_num, acc_num, loc_num, cond_num
-        ] + term_cols + tiv_cols
+        ] + term_cols + tiv_cols + [group_id_col.lower()]
         if SOURCE_IDX['loc'] in exposure_df:
             exposure_df_gul_inputs_cols += [SOURCE_IDX['loc']]
 
