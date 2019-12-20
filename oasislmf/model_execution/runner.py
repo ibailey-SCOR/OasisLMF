@@ -2,14 +2,17 @@ import logging
 import multiprocessing
 import os
 import shutil
-import warnings
 
 import subprocess
 
-from ..utils.defaults import KTOOLS_ALLOC_RULE_IL, KTOOLS_ALLOC_RULE_GUL
 from ..utils.exceptions import OasisException
 from ..utils.log import oasis_log
 from .bash import genbash
+from ..utils.defaults import (
+    KTOOLS_ALLOC_GUL_DEFAULT,
+    KTOOLS_ALLOC_IL_DEFAULT,
+    KTOOLS_ALLOC_RI_DEFAULT,
+)
 
 
 @oasis_log()
@@ -17,10 +20,11 @@ def run(
     analysis_settings,
     number_of_processes=-1,
     num_reinsurance_iterations=0,
-    ktools_mem_limit=False,
-    set_alloc_rule_gul=KTOOLS_ALLOC_RULE_GUL,
-    set_alloc_rule_il=KTOOLS_ALLOC_RULE_IL,
+    set_alloc_rule_gul=KTOOLS_ALLOC_GUL_DEFAULT,
+    set_alloc_rule_il=KTOOLS_ALLOC_IL_DEFAULT,
+    set_alloc_rule_ri=KTOOLS_ALLOC_RI_DEFAULT,
     fifo_tmp_dir=True,
+    stderr_guard=True,
     run_debug=False,
     filename='run_ktools.sh'
 ):
@@ -43,6 +47,7 @@ def run(
             process_id,
             max_process_id,
             gul_alloc_rule,
+            stderr_guard,
             **kwargs
         ):
 
@@ -56,6 +61,8 @@ def run(
                 cmd = '{} -c {}'.format(cmd, coverage_output)
             if item_output != '':
                 cmd = '{} -i {}'.format(cmd, item_output)
+            if stderr_guard:
+                cmd = '{} 2> log/gul_stderror.err'.format(cmd)
 
             return cmd
 
@@ -64,9 +71,10 @@ def run(
             analysis_settings,
             num_reinsurance_iterations=num_reinsurance_iterations,
             fifo_tmp_dir=fifo_tmp_dir,
-            mem_limit=ktools_mem_limit,
             gul_alloc_rule=set_alloc_rule_gul,
             il_alloc_rule=set_alloc_rule_il,
+            ri_alloc_rule=set_alloc_rule_ri,
+            stderr_guard=stderr_guard,
             bash_trace=run_debug,
             filename=filename,
             _get_getmodel_cmd=custom_get_getmodel_cmd,
@@ -77,16 +85,17 @@ def run(
             analysis_settings,
             num_reinsurance_iterations=num_reinsurance_iterations,
             fifo_tmp_dir=fifo_tmp_dir,
-            mem_limit=ktools_mem_limit,
             gul_alloc_rule=set_alloc_rule_gul,
             il_alloc_rule=set_alloc_rule_il,
+            ri_alloc_rule=set_alloc_rule_ri,
+            stderr_guard=stderr_guard,
             bash_trace=run_debug,
             filename=filename
         )
 
     # Don't attempt to run the bash script on windows
     if os.name == "nt":
-        warnings.warn("On windows, the bash script is not run automatically since it "
+        print("On windows, the bash script is not run automatically since it "
                       "will fail. It has been generated at \n\t{}".format(filename))
         return
 
