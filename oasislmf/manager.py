@@ -24,6 +24,7 @@ import pandas as pd
 from pathlib2 import Path
 
 from .model_execution import runner
+from .model_execution.conf import read_analysis_settings
 from .model_execution.bin import (
     csv_to_bin,
     prepare_run_directory,
@@ -56,6 +57,7 @@ from .utils.data import (
     get_json,
     get_utctimestamp,
 )
+from .utils.read_exposure import read_exposure_df
 from .utils.exceptions import OasisException
 from .utils.log import oasis_log
 from .utils.defaults import (
@@ -82,7 +84,8 @@ from .utils.path import (
     setcwd,
 )
 from .utils.coverages import SUPPORTED_COVERAGE_TYPES
-
+from .utils.file_conversion import (get_required_static_files,
+                                    get_necessary_conversions)
 pd.options.mode.chained_assignment = None
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -388,7 +391,8 @@ class OasisManager(object):
         fm_aggregation_profile_fp=None,
         ri_info_fp=None,
         ri_scope_fp=None,
-        oasis_files_prefixes=None
+        oasis_files_prefixes=None,
+        group_id_col="loc_id",
     ):
 
         # Convert paths to absolute
@@ -451,6 +455,9 @@ class OasisManager(object):
             keys_fp
         )
 
+        # Read the exposure data file into a pandas dataframe.
+        exposure_df = read_exposure_df(exposure_fp, exposure_profile)
+
         # If a pre-generated keys file path has not been provided,
         # then it is asssumed some model lookup assets have been provided, so
         # as to allow the lookup to be instantiated and called to generated
@@ -458,17 +465,13 @@ class OasisManager(object):
         # were provided then a "deterministic" keys file is generated.
         _keys_fp = _keys_errors_fp = None
         if not keys_fp:
+            # If there is no keys file provided then it has to be generated.
             _keys_fp = os.path.join(target_dir, 'keys.csv')
             _keys_errors_fp = os.path.join(target_dir, 'keys-errors.csv')
 
             cov_types = supported_oed_coverage_types or self.supported_oed_coverage_types
 
             if deterministic:
-                exposure_df = get_dataframe(
-                    src_fp=exposure_fp,
-                    empty_data_error_msg='No exposure found in the source exposure (loc.) file'
-                )
-                exposure_df['loc_id'] = get_ids(exposure_df, [portfolio_num, acc_num, loc_num])
                 loc_ids = (loc_it['loc_id'] for _, loc_it in exposure_df.loc[:, ['loc_id']].iterrows())
                 keys = [
                     {'loc_id': _loc_id, 'peril_id': 1, 'coverage_type': cov_type, 'area_peril_id': i + 1, 'vulnerability_id': i + 1}
@@ -506,10 +509,11 @@ class OasisManager(object):
             _keys_fp = os.path.join(target_dir, os.path.basename(keys_fp))
 
         # Get the GUL input items and exposure dataframes
-        gul_inputs_df, exposure_df = get_gul_input_items(
-            exposure_fp,
+        gul_inputs_df = get_gul_input_items(
+            exposure_df,
             _keys_fp,
-            exposure_profile=exposure_profile
+            exposure_profile=exposure_profile,
+            group_id_col=group_id_col
         )
 
         # If not in det. loss gen. scenario, write exposure summary file
@@ -617,7 +621,10 @@ class OasisManager(object):
         ktools_alloc_rule_ri=None,
         ktools_error_guard=None,
         ktools_debug=None,
-        user_data_dir=None
+        user_data_dir=None,
+        exposure_fp=None,
+        accounts_fp=None
+
     ):
 
         # Convert paths to absolute
@@ -628,9 +635,30 @@ class OasisManager(object):
         model_package_fp = as_path(model_package_fp, 'Model package path', is_dir=True)
         user_data_dir = as_path(user_data_dir, 'Directory containing additional user-supplied model data files', preexists=False)
 
-        il = all(p in os.listdir(oasis_fp) for p in ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv', 'fm_xref.csv'])
-        ri = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
-        gul_item_stream = False if (ktools_alloc_rule_gul == 0) or (self.ktools_alloc_rule_gul == 0) else True
+        # Insured loss calculations can only be done with the necessary input files
+        required_il_files = ['fm_policytc.csv', 'fm_profile.csv', 'fm_programme.csv',
+                             'fm_xref.csv']
+        is_il_files = all(p in os.listdir(oasis_fp) for p in required_il_files)
+        is_ri_files = any(re.match(r'RI_\d+$', fn) for fn in os.listdir(os.path.dirname(oasis_fp)) + os.listdir(oasis_fp))
+
+        # Read the analysis settings file
+        analysis_settings = read_analysis_settings(analysis_settings_fp, is_il_files, is_ri_files)
+
+        # Check if the static model files are up to date
+        out_of_date_static_files = get_necessary_conversions(
+            get_required_static_files(analysis_settings),
+            model_data_fp)
+        if any(out_of_date_static_files):
+            warnings.warn(("Static .bin files are out of date versions of .csv files:" +
+                           " {}").format(out_of_date_static_files))
+
+        # Check what kind of output we want
+        is_il = analysis_settings['il_output']
+        is_ri = analysis_settings['ri_output']
+
+        # Check whether it is a gul only analysis, meaning not item stream
+        if ktools_alloc_rule_gul is None:
+            ktools_alloc_rule_gul = self.ktools_alloc_rule_gul
 
         if not os.path.exists(model_run_fp):
             Path(model_run_fp).mkdir(parents=True, exist_ok=True)
@@ -641,39 +669,40 @@ class OasisManager(object):
             model_data_fp,
             analysis_settings_fp,
             user_data_dir=user_data_dir,
-            ri=ri
-        )
+            ri=is_ri)
 
-        # Load analysis_settings file
-        try:
-            analysis_settings_fn = 'analysis_settings.json'
-            _analysis_settings_fp = os.path.join(model_run_fp, analysis_settings_fn)
-            with io.open(_analysis_settings_fp, 'r', encoding='utf-8') as f:
-                analysis_settings = json.load(f)
-            if analysis_settings.get('analysis_settings'):
-                analysis_settings = analysis_settings['analysis_settings']
-        except (IOError, TypeError, ValueError):
-            raise OasisException('Invalid analysis settings file or file path: {}.'.format(_analysis_settings_fp))
+        # Copy static files into the "static" sub-folder of the ktools run folder
+        copy_static_files(model_run_fp, model_data_fp, analysis_settings)
 
+        # Move input files into the "input" sub-folder of the ktools run folder
+        copy_input_files(model_run_fp, oasis_fp, analysis_settings)
+
+        # Generate the summaryxref files which control the detail in result reporting
         generate_summaryxref_files(model_run_fp,
                                    analysis_settings,
                                    gul_item_stream=gul_item_stream,
-                                   il=il,
-                                   ri=ri)
+                                   il=is_il,
+                                   ri=is_ri,
+                                   exposure_fp=exposure_fp,
+                                   accounts_fp=accounts_fp)
 
-        if not ri:
+        # Generate the binary files for the input folder
+        if not is_ri:
+            # Without reinsurance, fairly straightforward
             fp = os.path.join(model_run_fp, 'input')
-            csv_to_bin(fp, fp, il=il)
+            csv_to_bin(fp, fp, input_files, is_il, ri=False,
+                       analysis_settings=analysis_settings)
         else:
+            # With reinsurance, account for the sub-folders
             contents = os.listdir(model_run_fp)
             for fp in [os.path.join(model_run_fp, fn) for fn in contents if re.match(r'RI_\d+$', fn) or re.match(r'input$', fn)]:
                 csv_to_bin(fp, fp, il=True, ri=True)
 
-        if not il:
+        if not is_il:
             analysis_settings['il_output'] = False
             analysis_settings['il_summaries'] = []
 
-        if not ri:
+        if not is_ri:
             analysis_settings['ri_output'] = False
             analysis_settings['ri_summaries'] = []
 
@@ -705,7 +734,13 @@ class OasisManager(object):
             fallback=self.ktools_alloc_rule_ri
         )
 
-        prepare_run_inputs(analysis_settings, model_run_fp, ri=ri)
+
+        # "Run inputs" are the input files specific to the analysis and settings,
+        # i.e. events, occurrences, return_periods, periods. Copy these files into run
+        # folder and remove any file indicators (e.g. events_p.bin ->
+        # events.bin)
+        input_files = prepare_run_inputs(analysis_settings, model_run_fp, model_data_fp)
+
         script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')
 
         if model_package_fp and os.path.exists(os.path.join(model_package_fp, 'supplier_model_runner.py')):
@@ -717,7 +752,7 @@ class OasisManager(object):
 
         with setcwd(model_run_fp):
             ri_layers = 0
-            if ri:
+            if is_ri:
                 try:
                     with io.open(os.path.join(model_run_fp, 'ri_layers.json'), 'r', encoding='utf-8') as f:
                         ri_layers = len(json.load(f))
