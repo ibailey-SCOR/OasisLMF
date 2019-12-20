@@ -29,6 +29,8 @@ from .model_execution.bin import (
     csv_to_bin,
     prepare_run_directory,
     prepare_run_inputs,
+    copy_input_files,
+    copy_static_files,
 )
 from .model_preparation.gul_inputs import (
     get_gul_input_items,
@@ -680,11 +682,14 @@ class OasisManager(object):
         # Generate the summaryxref files which control the detail in result reporting
         generate_summaryxref_files(model_run_fp,
                                    analysis_settings,
-                                   gul_item_stream=gul_item_stream,
                                    il=is_il,
-                                   ri=is_ri,
-                                   exposure_fp=exposure_fp,
-                                   accounts_fp=accounts_fp)
+                                   ri=is_ri)
+
+        # "Run inputs" are the input files specific to the analysis and settings,
+        # i.e. events, occurrences, return_periods, periods. Copy these files into run
+        # folder and remove any file indicators (e.g. events_p.bin ->
+        # events.bin)
+        input_files = prepare_run_inputs(analysis_settings, model_run_fp, model_data_fp)
 
         # Generate the binary files for the input folder
         if not is_ri:
@@ -735,11 +740,6 @@ class OasisManager(object):
         )
 
 
-        # "Run inputs" are the input files specific to the analysis and settings,
-        # i.e. events, occurrences, return_periods, periods. Copy these files into run
-        # folder and remove any file indicators (e.g. events_p.bin ->
-        # events.bin)
-        input_files = prepare_run_inputs(analysis_settings, model_run_fp, model_data_fp)
 
         script_fp = os.path.join(os.path.abspath(model_run_fp), 'run_ktools.sh')
 
