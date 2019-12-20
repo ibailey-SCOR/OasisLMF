@@ -185,7 +185,7 @@ def link_or_copy_file(filename, source_folder, destination_folder):
     except OSError as why:
         if why.errno == errno.EEXIST and os.path.islink(destfile):
             # If the link already exists, check files are different replace it
-            if os.readlink(destfile) != os.abspath(sourcefile):
+            if os.readlink(destfile) != os.path.abspath(sourcefile):
                 os.symlink(sourcefile, destfile + ".tmp")
                 os.replace(destfile + ".tmp", destfile)
                 print("\tLinking {} from {}".format(filename, source_folder))
