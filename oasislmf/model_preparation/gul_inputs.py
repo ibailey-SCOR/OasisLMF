@@ -177,9 +177,11 @@ def get_gul_input_items(
 
         # Select only the columns required. This reduces memory use significantly for portfolios
         # that include many OED columns.
-        exposure_df_gul_inputs_cols = [
-            'loc_id', portfolio_num, acc_num, loc_num, cond_num
-        ] + term_cols + tiv_cols + [group_id_col.lower()]
+        exposure_df_gul_inputs_cols = ['loc_id']
+        for col in [portfolio_num, acc_num, loc_num, cond_num, group_id_col.lower()] + term_cols + tiv_cols:
+                if col in exposure_df.columns:
+                    exposure_df_gul_inputs_cols.append(col)
+                    
         if SOURCE_IDX['loc'] in exposure_df:
             exposure_df_gul_inputs_cols += [SOURCE_IDX['loc']]
 

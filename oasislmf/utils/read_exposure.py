@@ -112,10 +112,9 @@ def read_exposure_df(exposure_fp, exposure_profile=get_default_exposure_profile(
         **{t: 'uint32' for t in ['loc_id']}
     }
 
-    # TODO: required columns are not required if loc_id doesn't yet exist
+    # Read file into a datafram
     exposure_df = get_dataframe(
         src_fp=exposure_fp,
-        required_cols=(loc_num, acc_num, portfolio_num,),
         col_dtypes=dtypes,
         col_defaults=defaults,
         empty_data_error_msg='No data found in the source exposure (loc.) file',
@@ -130,7 +129,11 @@ def read_exposure_df(exposure_fp, exposure_profile=get_default_exposure_profile(
             exposure_df.rename(columns={'locid': 'loc_id'}, inplace=True)
         else:
             warnings.warn('loc_id field not in loc file... building')
-            exposure_df['loc_id'] = get_ids(exposure_df, [portfolio_num, acc_num, loc_num])
+            try:
+                exposure_df['loc_id'] = get_ids(exposure_df, [portfolio_num, acc_num, loc_num])
+            except KeyError as e:
+                raise OasisException("Required columns are {}, {}, {}".format(
+                    portfolio_num, acc_num, loc_num))
 
     # Check the loc_id is a consistent index
     if exposure_df.loc_id.nunique() != len(exposure_df):
